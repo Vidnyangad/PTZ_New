@@ -202,3 +202,18 @@ class PTZController:
         except Exception as e:
             print(f"Get status error: {e}")
             return {}
+        
+    def move_vector(self, pan, tilt):
+        request = self.ptz.create_type('ContinuousMove')
+        request.ProfileToken = self.token
+
+        request.Velocity = {
+            'PanTilt': {
+                'x': pan,
+                'y': tilt
+            },
+            'Zoom': {'x': 0.0}
+        }
+
+        print("Sending vector to camera:", pan, tilt)
+        self.ptz.ContinuousMove(request)

@@ -8,6 +8,22 @@ class MotionEngine:
         self.is_running = False
         self.thread = None
 
+    def _simulate_diagonal(self, pan, tilt, duration):
+        interval = 0.04  # 40ms feels smooth
+        end_time = time.time() + duration
+
+        while time.time() < end_time and self.is_running:
+
+            if abs(pan) > 0:
+                self.ptz.move_vector(pan, 0.0)
+                time.sleep(interval)
+                self.ptz.stop()
+
+            if abs(tilt) > 0:
+                self.ptz.move_vector(0.0, tilt)
+                time.sleep(interval)
+                self.ptz.stop()
+
     def run_recipe(self, recipe):
         if self.is_running:
             print("Motion already running")
@@ -38,13 +54,28 @@ class MotionEngine:
                     time.sleep(wait_time)
 
                 elif action == "move":
-                    self.ptz.move(
-                        step["direction"],
-                        step["speed"]
-                    )
+                    
+                    if "pan" in step or "tilt" in step:
+                        # Direct control mode
+                        pan = step.get("pan", 0.0)
+                        tilt = step.get("tilt", 0.0)
+                        print("PAN:", pan, "TILT:", tilt)
+                        self.ptz.move_vector(pan, tilt)
+
+                    else:
+                        # Direction string mode (backward compatible)
+                        self.ptz.move(step["direction"], step["speed"])
+
                     time.sleep(step["duration"])
                     self.ptz.stop()
 
+                elif action == "move_diagonal":
+                    pan = step.get("pan", 0.0)
+                    tilt = step.get("tilt", 0.0)
+                    duration = step["duration"]
+
+                    self._simulate_diagonal(pan, tilt, duration)
+                
                 elif action == "zoom":
                     self.ptz.zoom(
                         step["direction"],

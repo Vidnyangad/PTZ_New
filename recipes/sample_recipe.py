@@ -1,42 +1,32 @@
 recipe = [
-    # Go to preset 1 first
-    {"action": "preset", "preset": 1, "wait": 20},
 
-    # Slow pan right
+    {"action": "preset", "preset": 1, "wait": 10},
+
+    # Slow diagonal sweep
+    {
+    "action": "move_diagonal",
+    "pan": 0.4,
+    "tilt": -0.2,
+    "duration": 10
+    },
+
+    {"action": "wait", "duration": 2},
+
+    # Pure tilt up
     {
         "action": "move",
-        "direction": "right",
-        "speed": 100,
-        "duration": 15
+        "pan": 0.0,
+        "tilt": 0.25,
+        "duration": 3
     },
 
-    {"action": "wait", "duration": 1.5},
+    {"action": "wait", "duration": 1},
 
-    # Slow zoom in
-    {
-        "action": "zoom",
-        "direction": "in",
-        "speed": 1,
-        "duration": 8
-    },
-
-    {"action": "wait", "duration": 1.5},
-
-    # Pan left slightly faster
+    # Pan + tilt opposite diagonal
     {
         "action": "move",
-        "direction": "left",
-        "speed": 10,
-        "duration": 5
-    },
-
-    {"action": "wait", "duration": 1.5},
-
-    # Zoom out
-    {
-        "action": "zoom",
-        "direction": "out",
-        "speed": 10,
-        "duration": 8
+        "pan": -0.4,
+        "tilt": -0.2,
+        "duration": 4
     }
 ]
