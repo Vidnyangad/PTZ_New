@@ -45,7 +45,6 @@ PTZ_PROTOCOL = "onvif"  # Using ONVIF protocol
 PTZ_PORT = 8899  # ONVIF port
 CAMERA_ADDRESS = 1  # Not used for ONVIF
 PREVIEW_FPS = 15  # Frame rate for live preview
-PRESET_SPEED = 0.1  # Speed for preset movements (0.1 = slow, 1.0 = fast)
 
 # Ensure recordings directory exists
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
@@ -280,35 +279,32 @@ def ptz_zoom():
             'message': str(e)
         }), 500
 
-
 @app.route('/api/ptz/preset/goto', methods=['POST'])
 def goto_preset():
     """Go to a preset position"""
     try:
         data = request.json
         preset_id = data.get('preset_id')
-        
+
         if not preset_id:
             return jsonify({
                 'success': False,
                 'message': 'Preset ID not specified'
             }), 400
-        
-        result = ptz.goto_preset(preset_id, PRESET_SPEED)
-        
+
+        ptz.goto_preset(preset_id)
+
         return jsonify({
             'success': True,
             'message': f'Moving to preset {preset_id}'
         })
-        
+
     except Exception as e:
-        print(f"Goto preset error: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return jsonify({
             'success': False,
             'message': str(e)
         }), 500
+
 
 
 @app.route('/api/ptz/preset/set', methods=['POST'])
