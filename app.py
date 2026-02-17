@@ -7,16 +7,32 @@ import os
 import cv2
 import time
 import threading
+import logging
 from ptz_controller import PTZController
 from video_capture import VideoCapture
 
+# ================= SUPPRESS OPENCV/FFMPEG WARNINGS =================
+# Suppress H.264 decoding errors (normal for RTSP streams)
+os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'
+os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'  # Only show errors, not warnings
+
+# Set FFmpeg log level to quiet (suppress H.264 decode errors)
+import warnings
+warnings.filterwarnings('ignore')
+
 # ================= LOW LATENCY RTSP =================
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-    "rtsp_transport;udp|"
+    "rtsp_transport;tcp|"      # Changed to TCP for more reliability
     "fflags;nobuffer|"
     "flags;low_delay|"
-    "max_delay;0"
+    "max_delay;0|"
+    "analyzeduration;0|"       # Don't analyze stream (faster startup)
+    "probesize;32"             # Minimal probe (faster startup)
 )
+
+# Suppress Flask development server warnings
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 app = Flask(__name__)
 
@@ -29,6 +45,7 @@ PTZ_PROTOCOL = "onvif"  # Using ONVIF protocol
 PTZ_PORT = 8899  # ONVIF port
 CAMERA_ADDRESS = 1  # Not used for ONVIF
 PREVIEW_FPS = 15  # Frame rate for live preview
+PRESET_SPEED = 0.1  # Speed for preset movements (0.1 = slow, 1.0 = fast)
 
 # Ensure recordings directory exists
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
@@ -42,12 +59,15 @@ latest_frame = None
 frame_lock = threading.Lock()
 
 def capture_loop():
-    """Continuous frame capture in separate thread"""
+    """Continuous frame capture in separate thread with error recovery"""
     global latest_frame
     
     cap = video_capture._connect_to_stream()
     if cap:
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    
+    error_count = 0
+    max_errors = 10
     
     while True:
         if cap is None or not cap.isOpened():
@@ -55,15 +75,32 @@ def capture_loop():
             cap = video_capture._connect_to_stream()
             if cap:
                 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                error_count = 0  # Reset error count on reconnect
             continue
         
-        ret, frame = cap.read()
-        if ret and frame is not None:
-            with frame_lock:
-                latest_frame = frame.copy()
-        else:
-            cap.release()
-            cap = None
+        try:
+            ret, frame = cap.read()
+            
+            if ret and frame is not None:
+                # Verify frame is valid (not corrupted)
+                if frame.size > 0:
+                    with frame_lock:
+                        latest_frame = frame.copy()
+                    error_count = 0  # Reset error count on success
+            else:
+                error_count += 1
+                if error_count > max_errors:
+                    # Too many errors, reconnect
+                    cap.release()
+                    cap = None
+                    error_count = 0
+        except Exception as e:
+            # Skip corrupted frames silently
+            error_count += 1
+            if error_count > max_errors:
+                cap.release()
+                cap = None
+                error_count = 0
         
         time.sleep(0.002)  # Minimal delay
 
@@ -247,16 +284,27 @@ def ptz_zoom():
 @app.route('/api/ptz/preset/goto', methods=['POST'])
 def goto_preset():
     """Go to a preset position"""
-    data = request.json
-    preset_id = data.get('preset_id')
-    
     try:
-        ptz.goto_preset(preset_id)
+        data = request.json
+        preset_id = data.get('preset_id')
+        
+        if not preset_id:
+            return jsonify({
+                'success': False,
+                'message': 'Preset ID not specified'
+            }), 400
+        
+        result = ptz.goto_preset(preset_id, PRESET_SPEED)
+        
         return jsonify({
             'success': True,
             'message': f'Moving to preset {preset_id}'
         })
+        
     except Exception as e:
+        print(f"Goto preset error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'message': str(e)

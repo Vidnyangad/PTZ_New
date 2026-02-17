@@ -64,8 +64,8 @@ class PTZController:
         # Convert speed (0-100) to velocity (0.0-1.0)
         velocity = speed / 100.0
         
-        # Maximum speed cap
-        MAX_SPEED = 0.3  # Reduced from 0.5 for better control
+        # Maximum speed cap - reduced for better control
+        MAX_SPEED = 0.25  # Reduced from 0.3 for snappier response
         velocity = min(velocity, MAX_SPEED)
         
         # Direction to velocity mapping
@@ -85,43 +85,35 @@ class PTZController:
         
         vel = direction_map[direction]
         
-        print(f"ONVIF ContinuousMove: {direction} at speed {speed} (velocity: {velocity:.2f})")
-        
         try:
-            # Send continuous move command with timeout (auto-stops after 1 second)
+            # Send continuous move command with short timeout for quick response
             self.ptz.ContinuousMove({
                 'ProfileToken': self.token,
                 'Velocity': {
                     'PanTilt': {'x': vel['pan'], 'y': vel['tilt']},
                     'Zoom': {'x': 0.0}
                 },
-                'Timeout': 'PT1S'  # 1 second timeout
+                'Timeout': 'PT0.5S'  # 0.5 second timeout for quick response
             })
             
-            print(f"✓ PTZ move command sent")
             return True
             
         except Exception as e:
             print(f"✗ ONVIF move error: {e}")
-            raise Exception(f"Failed to move PTZ: {e}")
+            # Don't raise exception to avoid blocking UI
+            return False
     
     def stop(self):
         """Stop all PTZ movement using ONVIF"""
-        print("ONVIF Stop")
-        
         try:
             self.ptz.Stop({
                 'ProfileToken': self.token,
                 'PanTilt': True,
                 'Zoom': True
             })
-            
-            print("✓ PTZ stopped")
             return True
-            
-        except Exception as e:
-            print(f"Stop error: {e}")
-            # Don't fail on stop errors - camera may auto-stop
+        except:
+            # Silently fail - camera may auto-stop
             return True
     
     def zoom(self, direction, speed=50):
@@ -157,24 +149,28 @@ class PTZController:
             print(f"✗ Zoom error: {e}")
             raise Exception(f"Failed to zoom: {e}")
     
-    def goto_preset(self, preset_id):
+    def goto_preset(self, preset_id, speed=0.3):
         """
         Move camera to a preset position using ONVIF
-        
+
         Args:
             preset_id: Preset position ID (1-255)
+            speed: Movement speed (0.0-1.0), controlled by PRESET_SPEED in app.py
         """
-        print(f"ONVIF Goto Preset: {preset_id}")
-        
+        print(f"ONVIF Goto Preset: {preset_id} at speed {speed}")
+
         try:
             self.ptz.GotoPreset({
                 'ProfileToken': self.token,
-                'PresetToken': str(preset_id)
+                'PresetToken': str(preset_id),
+                'Speed': {
+                    'PanTilt': {'x': speed, 'y': speed},
+                    'Zoom':    {'x': speed}
+                }
             })
-            
             print(f"✓ Moving to preset {preset_id}")
             return True
-            
+
         except Exception as e:
             print(f"✗ Goto preset error: {e}")
             raise Exception(f"Failed to go to preset: {e}")
@@ -214,3 +210,30 @@ class PTZController:
         except Exception as e:
             print(f"Get status error: {e}")
             return {}
+
+    def start_cruise(self):
+        """Start camera's built-in cruise/patrol if supported"""
+        try:
+            # Try ONVIF auxiliary command for cruise
+            self.ptz.SendAuxiliaryCommand({
+                'ProfileToken': self.token,
+                'AuxiliaryData': 'tour on'
+            })
+            print("✓ Camera cruise started")
+            return True
+        except Exception as e:
+            print(f"Cruise not supported via ONVIF: {e}")
+            raise Exception("Camera cruise not supported via ONVIF")
+
+    def stop_cruise(self):
+        """Stop camera's built-in cruise/patrol"""
+        try:
+            self.ptz.SendAuxiliaryCommand({
+                'ProfileToken': self.token,
+                'AuxiliaryData': 'tour off'
+            })
+            print("✓ Camera cruise stopped")
+            return True
+        except Exception as e:
+            print(f"Cruise stop not supported via ONVIF: {e}")
+            raise Exception("Camera cruise not supported via ONVIF")
