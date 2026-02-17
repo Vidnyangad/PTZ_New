@@ -63,10 +63,7 @@ class PTZController:
         """
         # Convert speed (0-100) to velocity (0.0-1.0)
         velocity = speed / 100.0
-        
-        # Maximum speed cap - reduced for better control
-        MAX_SPEED = 0.25  # Reduced from 0.3 for snappier response
-        velocity = min(velocity, MAX_SPEED)
+        velocity = max(min(velocity, 1.0), 0.0)
         
         # Direction to velocity mapping
         direction_map = {

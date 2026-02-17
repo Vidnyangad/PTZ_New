@@ -10,6 +10,8 @@ import threading
 import logging
 from ptz_controller import PTZController
 from video_capture import VideoCapture
+from motion_engine import MotionEngine
+from recipes.sample_recipe import recipe as sample_recipe
 
 # ================= SUPPRESS OPENCV/FFMPEG WARNINGS =================
 # Suppress H.264 decoding errors (normal for RTSP streams)
@@ -52,6 +54,7 @@ os.makedirs(RECORDINGS_DIR, exist_ok=True)
 # Initialize PTZ controller and video capture
 ptz = PTZController(CAMERA_IP, CAMERA_USER, CAMERA_PASSWORD, protocol=PTZ_PROTOCOL, port=PTZ_PORT, camera_address=CAMERA_ADDRESS)
 video_capture = VideoCapture(CAMERA_IP, CAMERA_USER, CAMERA_PASSWORD, RECORDINGS_DIR)
+motion_engine = MotionEngine(ptz)
 
 # ================= LIVE STREAM WITH SEPARATE THREAD =================
 latest_frame = None
@@ -359,6 +362,21 @@ def download_recording(filename):
 def video_feed():
     """Video streaming route using optimized threaded capture"""
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/api/motion/play', methods=['POST'])
+def play_motion():
+    try:
+        motion_engine.run_recipe(sample_recipe)
+        return jsonify({
+            'success': True,
+            'message': 'Motion recipe started'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
 
 
 if __name__ == '__main__':
