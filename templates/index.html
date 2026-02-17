@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PTZ Camera Controller</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 30px;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        h3 {
+            color: #667eea;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+
+        /* Video Container */
+        .video-wrapper {
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            position: relative;
+        }
+
+        #videoFeed {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Controls Sections */
+        .control-section {
+            margin-bottom: 25px;
+        }
+
+        .control-section:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Buttons */
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+        }
+
+        .btn-success {
+            background: #059669;
+            color: white;
+        }
+
+        /* PTZ Grid */
+        .ptz-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .ptz-btn {
+            padding: 18px;
+            background: #f3f4f6;
+            color: #1f2937;
+            border: none;
+            border-radius: 8px;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .ptz-btn:hover {
+            background: #e5e7eb;
+            transform: scale(1.05);
+        }
+
+        .ptz-btn:active {
+            background: #d1d5db;
+            transform: scale(0.95);
+        }
+
+        .ptz-btn.center {
+            background: #dc2626;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .ptz-btn.center:hover {
+            background: #b91c1c;
+        }
+
+        /* Status */
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .status.recording {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status.idle {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        /* Recording indicator */
+        .indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .indicator.active {
+            background: #dc2626;
+            animation: pulse 1.5s infinite;
+        }
+
+        .indicator.inactive {
+            background: #059669;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .recordings-list {
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .recording-item {
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .recording-item:hover {
+            background: #f3f4f6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 PTZ Camera Controller</h1>
+        <p class="subtitle">Stream • Control • Record</p>
+        
+        <div class="main-grid">
+            <!-- Video Feed -->
+            <div class="card">
+                <div class="video-wrapper">
+                    <img id="videoFeed" src="/video_feed" alt="Camera Feed">
+                </div>
+            </div>
+
+            <!-- Controls Panel -->
+            <div class="card">
+                <!-- Recording -->
+                <div class="control-section">
+                    <h3>📹 Recording</h3>
+                    <div id="recordingStatus" class="status idle">
+                        <span class="indicator inactive"></span>
+                        Idle
+                    </div>
+                    <div class="btn-group">
+                        <button id="startBtn" class="btn btn-danger" onclick="startRecording()">● Start</button>
+                        <button id="stopBtn" class="btn btn-primary" onclick="stopRecording()">■ Stop</button>
+                    </div>
+                </div>
+
+                <!-- PTZ Controls -->
+                <div class="control-section">
+                    <h3>🎮 PTZ Controls</h3>
+                    <div class="ptz-grid">
+                        <div></div>
+                        <button class="ptz-btn" onmousedown="ptzMove('up')" onmouseup="ptzStop()">⬆</button>
+                        <div></div>
+                        
+                        <button class="ptz-btn" onmousedown="ptzMove('left')" onmouseup="ptzStop()">⬅</button>
+                        <button class="ptz-btn center" onclick="ptzStop()">STOP</button>
+                        <button class="ptz-btn" onmousedown="ptzMove('right')" onmouseup="ptzStop()">➡</button>
+                        
+                        <div></div>
+                        <button class="ptz-btn" onmousedown="ptzMove('down')" onmouseup="ptzStop()">⬇</button>
+                        <div></div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-success" onmousedown="ptzZoom('in')" onmouseup="ptzStop()">➕ Zoom</button>
+                        <button class="btn btn-success" onmousedown="ptzZoom('out')" onmouseup="ptzStop()">➖ Zoom</button>
+                    </div>
+                </div>
+
+                <!-- Presets -->
+                <div class="control-section">
+                    <h3>🎯 Presets</h3>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="gotoPreset(1)">Go 1</button>
+                        <button class="btn btn-primary" onclick="gotoPreset(2)">Go 2</button>
+                        <button class="btn btn-success" onclick="setPreset(1)">Set 1</button>
+                        <button class="btn btn-success" onclick="setPreset(2)">Set 2</button>
+                    </div>
+                </div>
+
+                <!-- Recordings -->
+                <div class="control-section">
+                    <h3>📂 Recordings</h3>
+                    <div id="recordingsList" class="recordings-list">
+                        <p style="text-align: center; color: #9ca3af; font-size: 13px;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Recording
+        async function startRecording() {
+            const r = await fetch('/api/recording/start', { method: 'POST' });
+            const d = await r.json();
+            if (d.success) updateStatus();
+        }
+
+        async function stopRecording() {
+            const r = await fetch('/api/recording/stop', { method: 'POST' });
+            const d = await r.json();
+            if (d.success) {
+                updateStatus();
+                loadRecordings();
+            }
+        }
+
+        // PTZ
+        function ptzMove(direction) {
+            fetch('/api/ptz/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ direction: direction, speed: 50 })
+            });
+        }
+
+        function ptzStop() {
+            fetch('/api/ptz/stop', { method: 'POST' });
+        }
+
+        function ptzZoom(direction) {
+            fetch('/api/ptz/zoom', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ direction: direction })
+            });
+        }
+
+        function gotoPreset(id) {
+            fetch('/api/ptz/preset/goto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ preset_id: id })
+            });
+        }
+
+        function setPreset(id) {
+            if (confirm(`Save current position as Preset ${id}?`)) {
+                fetch('/api/ptz/preset/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ preset_id: id })
+                });
+            }
+        }
+
+        // Status updates
+        function updateStatus() {
+            fetch('/api/recording/status')
+                .then(r => r.json())
+                .then(data => {
+                    const statusDiv = document.getElementById('recordingStatus');
+                    if (data.is_recording) {
+                        statusDiv.className = 'status recording';
+                        statusDiv.innerHTML = '<span class="indicator active"></span>Recording';
+                        document.getElementById('startBtn').disabled = true;
+                        document.getElementById('stopBtn').disabled = false;
+                    } else {
+                        statusDiv.className = 'status idle';
+                        statusDiv.innerHTML = '<span class="indicator inactive"></span>Idle';
+                        document.getElementById('startBtn').disabled = false;
+                        document.getElementById('stopBtn').disabled = true;
+                    }
+                });
+        }
+
+        function loadRecordings() {
+            fetch('/api/recordings')
+                .then(r => r.json())
+                .then(recordings => {
+                    const list = document.getElementById('recordingsList');
+                    if (recordings.length === 0) {
+                        list.innerHTML = '<p style="text-align: center; color: #9ca3af; font-size: 13px;">No recordings</p>';
+                        return;
+                    }
+                    list.innerHTML = recordings.map(rec => `
+                        <div class="recording-item">
+                            <div>
+                                <div style="font-weight: 600;">${rec.filename}</div>
+                                <div style="color: #6b7280; font-size: 11px;">${formatBytes(rec.size)}</div>
+                            </div>
+                            <a href="/recordings/${rec.filename}" download style="color: #667eea; text-decoration: none;">⬇</a>
+                        </div>
+                    `).join('');
+                });
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 10) / 10 + ' ' + sizes[i];
+        }
+
+        // Initialize
+        updateStatus();
+        loadRecordings();
+        setInterval(updateStatus, 2000);
+        setInterval(loadRecordings, 10000);
+
+        // Video feed error handling
+        document.getElementById('videoFeed').onerror = function() {
+            setTimeout(() => {
+                this.src = '/video_feed?' + new Date().getTime();
+            }, 3000);
+        };
+    </script>
+</body>
+</html>
