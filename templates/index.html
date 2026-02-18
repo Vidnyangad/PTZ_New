@@ -93,6 +93,17 @@ button.secondary {
     color: white;
 }
 
+.preset-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.preset-row {
+    display: flex;
+    gap: 10px;
+}
+
 /* ===== Responsive (Stack on small screens) ===== */
 @media (max-width: 900px) {
     .main-container {
@@ -133,12 +144,20 @@ button.secondary {
         </div>
 
         <!-- Presets -->
-        <div class="section">
+        <div class="preset-controls">
             <h3>Presets</h3>
-            <button onclick="gotoPreset(1)">Go to Preset 1</button>
-            <button onclick="gotoPreset(2)">Go to Preset 2</button>
-        </div>
+            <div class="preset-row">
+                <button onclick="gotoPreset(1)">Go to Preset 1</button>
+                <button onclick="gotoPreset(2)">Go to Preset 2</button>
+            </div>
 
+            <div class="preset-row">
+                <button onclick="setPreset(1)">Set Preset 1</button>
+                <button onclick="setPreset(2)">Set Preset 2</button>
+            </div>
+
+        </div>
+        
         <!-- Motion Recipe -->
         <div class="section">
             <h3>Motion Recipe</h3>
@@ -187,6 +206,15 @@ function gotoPreset(id) {
         body: JSON.stringify({ preset_id: id })
     });
 }
+
+function setPreset(id) {
+    fetch('/api/ptz/preset/set', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ preset_id: id })
+    });
+}
+
 
 // Motion Recipe
 function playMotion() {
