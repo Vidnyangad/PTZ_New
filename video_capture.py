@@ -119,9 +119,16 @@ class VideoCapture:
                 self._is_recording = False
                 return
             
-            # Get video properties
-            frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            # Read a first frame to ensure stream is valid and dimensions are populated
+            # Sometimes cap.get() returns 0 for width/height before reading the first frame.
+            ret, first_frame = cap.read()
+            if not ret or first_frame is None:
+                print("Failed to read initial frame from camera stream")
+                self._is_recording = False
+                return
+
+            # Get video properties from frame
+            frame_height, frame_width = first_frame.shape[:2]
             fps = int(cap.get(cv2.CAP_PROP_FPS))
             
             # Use default FPS if camera doesn't provide it
@@ -139,7 +146,9 @@ class VideoCapture:
                 self._is_recording = False
                 return
             
-            frame_count = 0
+            # Write the first frame we already read
+            out.write(first_frame)
+            frame_count = 1
             start_time = time.time()
             
             # Recording loop
@@ -198,9 +207,8 @@ class VideoCapture:
                 
                 if ret and frame is not None:
                     print(f"Successfully connected to: {url}")
-                    # Reset to beginning
-                    cap.release()
-                    cap = cv2.VideoCapture(url)
+                    # In livestream RTSP, we can't reliably seek/reset,
+                    # so we just return the currently working capture object
                     return cap
                 else:
                     cap.release()

@@ -383,7 +383,8 @@ def record_motion():
         try:
             # Start recording
             video_capture.start_recording()
-            time.sleep(1) # Give it a moment to start recording
+            # Give it a moment to connect to the stream, read first frame and start the file writer
+            time.sleep(2)
 
             # Start motion recipe and wait for it to finish
             motion_engine.run_recipe(sample_recipe)
