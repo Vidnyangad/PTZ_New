@@ -387,6 +387,50 @@ def play_motion():
             'message': str(e)
         }), 500
 
+@app.route('/api/motion/record', methods=['POST'])
+def record_motion():
+    def _record_and_play():
+        try:
+            # Start recording
+            video_capture.start_recording()
+            time.sleep(1) # Give it a moment to start recording
+
+            # Start motion recipe and wait for it to finish
+            motion_engine.run_recipe(sample_recipe)
+            # We need to wait for the motion recipe thread to complete
+            if motion_engine.thread and motion_engine.thread.is_alive():
+                motion_engine.thread.join()
+
+            time.sleep(1) # Record for one more second after finishing
+            # Stop recording
+            video_capture.stop_recording()
+        except Exception as e:
+            print(f"Error in record and play motion: {e}")
+            try:
+                # Cleanup if recording is still active
+                if video_capture.is_recording():
+                    video_capture.stop_recording()
+            except:
+                pass
+
+    try:
+        if motion_engine.is_running:
+            return jsonify({
+                'success': False,
+                'message': 'Motion already running'
+            }), 400
+
+        threading.Thread(target=_record_and_play, daemon=True).start()
+
+        return jsonify({
+            'success': True,
+            'message': 'Started recording and playing motion recipe'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
 
 
 if __name__ == '__main__':
