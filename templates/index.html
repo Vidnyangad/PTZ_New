@@ -102,6 +102,11 @@ button.secondary {
 .preset-row {
     display: flex;
     gap: 10px;
+    justify-content: center;
+}
+
+.preset-row button {
+    flex: 1;
 }
 
 /* ===== Responsive (Stack on small screens) ===== */
@@ -132,19 +137,27 @@ button.secondary {
         <div class="section">
             <h3>Manual Movement</h3>
 
-            <button onmousedown="move('up')" onmouseup="stop()">Up</button><br>
-            <button onmousedown="move('left')" onmouseup="stop()">Left</button>
-            <button onmousedown="move('down')" onmouseup="stop()">Down</button>
-            <button onmousedown="move('right')" onmouseup="stop()">Right</button><br>
+            <div class="preset-row">
+                <button onmousedown="move('up')" onmouseup="stop()">Up</button>
+                <button onmousedown="move('down')" onmouseup="stop()">Down</button>
+            </div>
+            <div class="preset-row">
+                <button onmousedown="move('left')" onmouseup="stop()">Left</button>
+                <button onmousedown="move('right')" onmouseup="stop()">Right</button>
+            </div>
 
-            <button onmousedown="zoom('in')" onmouseup="stop()">Zoom In</button>
-            <button onmousedown="zoom('out')" onmouseup="stop()">Zoom Out</button><br>
+            <div class="preset-row">
+                <button onmousedown="zoom('in')" onmouseup="stop()">Zoom In</button>
+                <button onmousedown="zoom('out')" onmouseup="stop()">Zoom Out</button>
+            </div>
 
-            <button class="danger" onclick="stop()">STOP</button>
+            <div class="preset-row">
+                <button class="danger" onclick="stop()">STOP</button>
+            </div>
         </div>
 
         <!-- Presets -->
-        <div class="preset-controls">
+        <div class="section preset-controls">
             <h3>Presets</h3>
             <div class="preset-row">
                 <button onclick="gotoPreset(1)">Go to Preset 1</button>
@@ -161,14 +174,19 @@ button.secondary {
         <!-- Motion Recipe -->
         <div class="section">
             <h3>Motion Recipe</h3>
-            <button class="secondary" onclick="playMotion()">Play Motion Recipe</button>
+            <div class="preset-row">
+                <button class="secondary" onclick="playMotion()">Play Motion Recipe</button>
+                <button class="secondary" onclick="saveMotionVideo()">Save Motion Video</button>
+            </div>
         </div>
 
         <!-- Recording -->
         <div class="section">
             <h3>Recording</h3>
-            <button onclick="startRecording()">Start Recording</button>
-            <button onclick="stopRecording()">Stop Recording</button>
+            <div class="preset-row">
+                <button onclick="startRecording()">Start Recording</button>
+                <button onclick="stopRecording()">Stop Recording</button>
+            </div>
         </div>
 
     </div>
@@ -219,6 +237,10 @@ function setPreset(id) {
 // Motion Recipe
 function playMotion() {
     fetch('/api/motion/play', { method: 'POST' });
+}
+
+function saveMotionVideo() {
+    fetch('/api/motion/record', { method: 'POST' });
 }
 
 // Recording
