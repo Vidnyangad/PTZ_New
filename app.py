@@ -12,6 +12,7 @@ from ptz_controller import PTZController
 from video_capture import VideoCapture
 from motion_engine import MotionEngine
 from recipes.sample_recipe import recipe as sample_recipe
+import video_processor
 
 # ================= SUPPRESS OPENCV/FFMPEG WARNINGS =================
 # Suppress H.264 decoding errors (normal for RTSP streams)
@@ -423,7 +424,12 @@ def record_motion():
 
             time.sleep(1) # Record for one more second after finishing
             # Stop recording
-            video_capture.stop_recording()
+            recorded_filename = video_capture.stop_recording()
+
+            # Run final video processing with FFmpeg
+            recorded_path = os.path.join(RECORDINGS_DIR, recorded_filename)
+            video_processor.process_final_video(recorded_path, RECORDINGS_DIR)
+
         except Exception as e:
             print(f"Error in record and play motion: {e}")
             try:
