@@ -393,11 +393,15 @@ def record_motion():
         try:
             # Start recording
             video_capture.start_recording()
-            time.sleep(1) # Give it a moment to start recording
+
+            # Since video_capture.start_recording() spins up a background thread that establishes
+            # an RTSP connection, reads initial frames, and creates the file, we must wait
+            # enough time for it to finish initializing before blasting the camera with PTZ commands.
+            # Give it ample time to start writing frames successfully.
+            time.sleep(3)
 
             # Start motion recipe and wait for it to finish
             motion_engine.run_recipe(sample_recipe)
-            # We need to wait for the motion recipe thread to complete
             if motion_engine.thread and motion_engine.thread.is_alive():
                 motion_engine.thread.join()
 
