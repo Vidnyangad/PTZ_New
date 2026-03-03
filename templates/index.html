@@ -93,6 +93,14 @@ button.secondary {
     color: white;
 }
 
+button:disabled {
+    background: #cccccc;
+    color: #666666;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
 .preset-controls {
     display: flex;
     flex-direction: column;
@@ -138,17 +146,17 @@ button.secondary {
             <h3>Manual Movement</h3>
 
             <div class="preset-row">
-                <button onmousedown="move('up')" onmouseup="stop()">Up</button>
-                <button onmousedown="move('down')" onmouseup="stop()">Down</button>
+                <button class="disableable" onmousedown="move('up')" onmouseup="stop()">Up</button>
+                <button class="disableable" onmousedown="move('down')" onmouseup="stop()">Down</button>
             </div>
             <div class="preset-row">
-                <button onmousedown="move('left')" onmouseup="stop()">Left</button>
-                <button onmousedown="move('right')" onmouseup="stop()">Right</button>
+                <button class="disableable" onmousedown="move('left')" onmouseup="stop()">Left</button>
+                <button class="disableable" onmousedown="move('right')" onmouseup="stop()">Right</button>
             </div>
 
             <div class="preset-row">
-                <button onmousedown="zoom('in')" onmouseup="stop()">Zoom In</button>
-                <button onmousedown="zoom('out')" onmouseup="stop()">Zoom Out</button>
+                <button class="disableable" onmousedown="zoom('in')" onmouseup="stop()">Zoom In</button>
+                <button class="disableable" onmousedown="zoom('out')" onmouseup="stop()">Zoom Out</button>
             </div>
 
             <div class="preset-row">
@@ -160,13 +168,13 @@ button.secondary {
         <div class="section preset-controls">
             <h3>Presets</h3>
             <div class="preset-row">
-                <button onclick="gotoPreset(1)">Go to Preset 1</button>
-                <button onclick="gotoPreset(2)">Go to Preset 2</button>
+                <button class="disableable" onclick="gotoPreset(1)">Go to Preset 1</button>
+                <button class="disableable" onclick="gotoPreset(2)">Go to Preset 2</button>
             </div>
 
             <div class="preset-row">
-                <button onclick="setPreset(1)">Set Preset 1</button>
-                <button onclick="setPreset(2)">Set Preset 2</button>
+                <button class="disableable" onclick="setPreset(1)">Set Preset 1</button>
+                <button class="disableable" onclick="setPreset(2)">Set Preset 2</button>
             </div>
 
         </div>
@@ -175,8 +183,8 @@ button.secondary {
         <div class="section">
             <h3>Motion Recipe</h3>
             <div class="preset-row">
-                <button class="secondary" onclick="playMotion()">Play Motion Recipe</button>
-                <button class="secondary" onclick="saveMotionVideo()">Save Motion Video</button>
+                <button class="secondary disableable" onclick="playMotion()">Play Motion Recipe</button>
+                <button class="secondary disableable" onclick="saveMotionVideo()">Save Motion Video</button>
             </div>
         </div>
 
@@ -184,8 +192,8 @@ button.secondary {
         <div class="section">
             <h3>Recording</h3>
             <div class="preset-row">
-                <button onclick="startRecording()">Start Recording</button>
-                <button onclick="stopRecording()">Stop Recording</button>
+                <button class="disableable" onclick="startRecording()">Start Recording</button>
+                <button class="disableable" onclick="stopRecording()">Stop Recording</button>
             </div>
         </div>
 
@@ -251,6 +259,22 @@ function startRecording() {
 function stopRecording() {
     fetch('/api/recording/stop', { method: 'POST' });
 }
+
+// Status Polling for UI Updates
+function checkMotionStatus() {
+    fetch('/api/motion/status')
+        .then(response => response.json())
+        .then(data => {
+            const disableableButtons = document.querySelectorAll('.disableable');
+            disableableButtons.forEach(button => {
+                button.disabled = data.is_active;
+            });
+        })
+        .catch(error => console.error('Error fetching motion status:', error));
+}
+
+// Poll every 1 second
+setInterval(checkMotionStatus, 1000);
 
 </script>
 

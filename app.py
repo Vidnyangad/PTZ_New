@@ -42,7 +42,7 @@ app = Flask(__name__)
 CAMERA_IP = "192.168.1.11"
 CAMERA_USER = "admin"  # Change these credentials
 CAMERA_PASSWORD = "password"
-RECORDINGS_DIR = "recordings"
+RECORDINGS_DIR = r"C:\SavedPTZVideos"
 PTZ_PROTOCOL = "onvif"  # Using ONVIF protocol
 PTZ_PORT = 8899  # ONVIF port
 CAMERA_ADDRESS = 1  # Not used for ONVIF
@@ -53,6 +53,10 @@ os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
 # Initialize PTZ controller and video capture
 ptz = PTZController(CAMERA_IP, CAMERA_USER, CAMERA_PASSWORD, protocol=PTZ_PROTOCOL, port=PTZ_PORT, camera_address=CAMERA_ADDRESS)
+
+latest_frame = None
+frame_lock = threading.Lock()
+
 def get_latest_frame():
     with frame_lock:
         return None if latest_frame is None else latest_frame.copy()
@@ -66,9 +70,10 @@ video_capture = VideoCapture(
 )
 motion_engine = MotionEngine(ptz)
 
+# Global state for automated motion sequence status
+automated_motion_active = False
+
 # ================= LIVE STREAM WITH SEPARATE THREAD =================
-latest_frame = None
-frame_lock = threading.Lock()
 
 def capture_loop():
     """Continuous frame capture in separate thread with error recovery"""
@@ -387,10 +392,21 @@ def play_motion():
             'message': str(e)
         }), 500
 
+@app.route('/api/motion/status', methods=['GET'])
+def motion_status():
+    return jsonify({
+        'is_active': automated_motion_active or motion_engine.is_running
+    })
+
 @app.route('/api/motion/record', methods=['POST'])
 def record_motion():
+    global automated_motion_active
+
     def _record_and_play():
+        global automated_motion_active
         try:
+            automated_motion_active = True
+
             # Start recording
             video_capture.start_recording()
 
@@ -416,12 +432,14 @@ def record_motion():
                     video_capture.stop_recording()
             except:
                 pass
+        finally:
+            automated_motion_active = False
 
     try:
-        if motion_engine.is_running:
+        if automated_motion_active or motion_engine.is_running:
             return jsonify({
                 'success': False,
-                'message': 'Motion already running'
+                'message': 'Motion sequence is already running'
             }), 400
 
         threading.Thread(target=_record_and_play, daemon=True).start()
