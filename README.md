@@ -10,7 +10,9 @@ A Flask-based web application for controlling PTZ (Pan-Tilt-Zoom) cameras and re
   - 8-directional movement control
   - Zoom in/out
   - Preset positions (save and recall)
-- **Web Interface**: Clean, responsive UI for all controls
+- **Motion Recipes**: Create custom, automated sequences of PTZ commands
+- **Automated Motion Video Capture**: One-click combination of automatic recording and executing a motion recipe
+- **Web Interface**: Clean, responsive, uniform flexbox UI for all controls
 - **Recording Management**: View and download all recordings
 
 ## Video Format: MP4 vs AVI
@@ -125,6 +127,12 @@ http://YOUR_COMPUTER_IP:5000
 3. Click **"Stop Recording"** to finish
 4. Videos are automatically saved with timestamps
 
+### Automated Motion Video Capture
+1. Go to the "Motion Recipe" section on the dashboard
+2. Click **"Save Motion Video"**
+3. The server will start recording, wait a few seconds to let the stream stabilize, and then run a predefined sequence of PTZ movements (a motion recipe)
+4. Recording stops automatically once the motion sequence is finished
+
 ### PTZ Control
 
 - Use the **directional arrows** to pan/tilt the camera
@@ -163,6 +171,10 @@ http://YOUR_COMPUTER_IP:5000
 - `POST /api/recording/start` - Start recording
 - `POST /api/recording/stop` - Stop recording
 - `GET /api/recording/status` - Get recording status
+
+### Motion Recipes
+- `POST /api/motion/play` - Play the default motion recipe (without recording)
+- `POST /api/motion/record` - Start video recording, play the motion recipe, and cleanly stop recording when done
 
 ### PTZ Control
 - `POST /api/ptz/move` - Move camera (direction, speed)

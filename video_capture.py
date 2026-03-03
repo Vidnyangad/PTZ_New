@@ -15,7 +15,7 @@ class VideoCapture:
     Handles streaming and recording from IP cameras
     """
     
-    def __init__(self, camera_ip, username, password, recordings_dir, frame_provider=None):
+    def __init__(self, camera_ip, username, password, recordings_dir):
         """
         Initialize Video Capture
         
@@ -29,7 +29,6 @@ class VideoCapture:
         self.username = username
         self.password = password
         self.recordings_dir = recordings_dir
-        self.frame_provider = frame_provider
         
         self._is_recording = False
         self._recording_thread = None
@@ -103,31 +102,35 @@ class VideoCapture:
     
     def _record_video(self, filepath):
         """
-        Record using shared frames from preview thread
+        Internal method to handle video recording
+
+        Args:
+            filepath: Path to save the video file
         """
+        cap = None
         out = None
 
         try:
-            # Wait until first frame is available
-            print("Waiting for first frame...")
-            while not self._stop_event.is_set():
-                frame = self.frame_provider()
-                if frame is not None:
-                    break
-                time.sleep(0.1)
+            # Try to connect to camera stream
+            cap = self._connect_to_stream()
 
-            if frame is None:
-                print("No frames available for recording.")
+            if cap is None or not cap.isOpened():
+                print("Failed to connect to camera stream")
                 self._is_recording = False
                 return
 
-            frame_height, frame_width = frame.shape[:2]
-            fps = 25
-            frame_interval = 1 / fps
-            next_frame_time = time.time()
+            # Get video properties
+            frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fps = int(cap.get(cv2.CAP_PROP_FPS))
+
+            # Use default FPS if camera doesn't provide it
+            if fps == 0 or fps > 60:
+                fps = 25
 
             print(f"Recording at {frame_width}x{frame_height} @ {fps}fps")
 
+            # Define codec and create VideoWriter for MP4
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             out = cv2.VideoWriter(filepath, fourcc, fps, (frame_width, frame_height))
 
@@ -141,19 +144,28 @@ class VideoCapture:
 
             # Recording loop
             while not self._stop_event.is_set():
-                frame = self.frame_provider()
-
-                if frame is not None:
-                    out.write(frame)
-                    frame_count += 1
+                ret, frame = cap.read()
                 
-                next_frame_time = start_time + frame_count * frame_interval
-                sleep_time = next_frame_time - time.time()
+                if not ret:
+                    print("Failed to read frame, attempting to reconnect...")
+                    cap.release()
+                    time.sleep(1)
+                    cap = self._connect_to_stream()
+                    if cap is None:
+                        break
+                    continue
 
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
-                else:
-                    next_frame_time = time.time()
+                # Write frame to file
+                out.write(frame)
+                frame_count += 1
+
+                # Print status every 100 frames
+                if frame_count % 100 == 0:
+                    elapsed = time.time() - start_time
+                    print(f"Recorded {frame_count} frames ({elapsed:.1f}s)")
+
+                # Small delay to prevent CPU overload
+                time.sleep(0.001)
 
             print(f"Recording stopped. Total frames: {frame_count}")
 
@@ -162,6 +174,9 @@ class VideoCapture:
             self._is_recording = False
 
         finally:
+            # Clean up
+            if cap:
+                cap.release()
             if out:
                 out.release()
     

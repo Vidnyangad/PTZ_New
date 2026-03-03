@@ -4,9 +4,9 @@ recipe = [
 
     # Slow diagonal sweep
     {
-    "action": "move",
-    "pan": 0.2,
-    "tilt": 0.0,
+    "action": "move_diagonal",
+    "pan": 0.4,
+    "tilt": -0.2,
     "duration": 10
     },
 
@@ -16,7 +16,7 @@ recipe = [
     {
         "action": "move",
         "pan": 0.0,
-        "tilt": 0.5,
+        "tilt": 0.25,
         "duration": 3
     },
 
@@ -26,7 +26,7 @@ recipe = [
     {
         "action": "move",
         "pan": -0.4,
-        "tilt": 0.0,
+        "tilt": -0.2,
         "duration": 4
     }
 ]
