@@ -36,9 +36,9 @@ The application uses **MP4** format for recordings. Here's why:
 
 The application is split into three main modules:
 
-1. **app.py**: Main Flask application and API endpoints
+1. **app.py**: Main Flask application and API endpoints. It manages a persistent background thread that continuously reads frames from the camera. This ensures a stable stream connection.
 2. **ptz_controller.py**: PTZ camera control (supports HTTP API and ONVIF)
-3. **video_capture.py**: Video stream capture and recording using OpenCV
+3. **video_capture.py**: Video stream capture and recording using OpenCV. It now utilizes a shared frame-provider model—when recording begins, it seamlessly writes the pre-fetched frames from `app.py` directly to the output file rather than spinning up a redundant camera connection.
 
 ## Installation
 
@@ -130,8 +130,8 @@ http://YOUR_COMPUTER_IP:5000
 ### Automated Motion Video Capture
 1. Go to the "Motion Recipe" section on the dashboard
 2. Click **"Save Motion Video"**
-3. The server will start recording, wait a few seconds to let the stream stabilize, and then run a predefined sequence of PTZ movements (a motion recipe)
-4. Recording stops automatically once the motion sequence is finished
+3. The server will begin instantaneously appending incoming frames to a recording file and subsequently run a predefined sequence of PTZ movements (a motion recipe).
+4. Recording stops automatically once the motion sequence is finished. Because recording does not require a new RTSP connection under the hood, this process is smooth, instantaneous, and network-efficient.
 
 ### PTZ Control
 
