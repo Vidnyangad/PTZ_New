@@ -53,7 +53,17 @@ os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
 # Initialize PTZ controller and video capture
 ptz = PTZController(CAMERA_IP, CAMERA_USER, CAMERA_PASSWORD, protocol=PTZ_PROTOCOL, port=PTZ_PORT, camera_address=CAMERA_ADDRESS)
-video_capture = VideoCapture(CAMERA_IP, CAMERA_USER, CAMERA_PASSWORD, RECORDINGS_DIR)
+def get_latest_frame():
+    with frame_lock:
+        return None if latest_frame is None else latest_frame.copy()
+
+video_capture = VideoCapture(
+    CAMERA_IP,
+    CAMERA_USER,
+    CAMERA_PASSWORD,
+    RECORDINGS_DIR,
+    frame_provider=get_latest_frame
+)
 motion_engine = MotionEngine(ptz)
 
 # ================= LIVE STREAM WITH SEPARATE THREAD =================
