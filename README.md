@@ -135,3 +135,38 @@ To change the recording format from MP4 to AVI, edit the `fourcc` codec in `vide
 
 ## License
 MIT License - Feel free to modify and use as needed.
+
+---
+
+## Running on Boot (Start Automatically)
+
+To make the system truly headless, you can configure both the Windows Server and the Raspberry Pi to launch their respective scripts automatically whenever they are turned on.
+
+### 1. Windows Server (Start `app.py` on Boot)
+The best way to run a Python script automatically in the background on Windows is using the **Task Scheduler**.
+
+1. Open the Windows Start menu, type **Task Scheduler**, and open it.
+2. In the right pane, click **Create Basic Task...**
+3. **Name:** `PTZ Camera Server` -> Click Next.
+4. **Trigger:** Select **When the computer starts** -> Click Next.
+5. **Action:** Select **Start a program** -> Click Next.
+6. **Program/script:** Type the path to your Python executable (e.g., `C:\Python39\python.exe` or simply `python` if it's in your system PATH).
+7. **Add arguments:** Type `app.py`
+8. **Start in:** Type the full path to your project folder (e.g., `C:\Users\YourName\Documents\PTZ_New`).
+9. Click **Finish**.
+10. To ensure it runs in the background without a command window, double-click your new task in the Task Scheduler Library, and on the General tab, check **Run whether user is logged on or not** and **Hidden**. Click OK.
+
+### 2. Raspberry Pi Viewer (Start `pi_viewer.py` on Boot)
+Because the Pi viewer requires the graphical desktop (X11/Wayland) to display OpenCV windows and VLC video playback, we use an **autostart** configuration rather than a headless background service.
+
+1. Open a terminal on your Raspberry Pi.
+2. Create or edit the autostart file for the current user:
+   ```bash
+   mkdir -p ~/.config/autostart
+   echo "[Desktop Entry]" > ~/.config/autostart/ptzviewer.desktop
+   echo "Type=Application" >> ~/.config/autostart/ptzviewer.desktop
+   echo "Name=PTZ Viewer" >> ~/.config/autostart/ptzviewer.desktop
+   echo "Exec=/usr/bin/python3 /home/pi/PTZ_New/pi_viewer.py" >> ~/.config/autostart/ptzviewer.desktop
+   echo "Terminal=false" >> ~/.config/autostart/ptzviewer.desktop
+   ```
+3. Reboot the Pi (`sudo reboot`). When the desktop environment loads, the Python script will automatically launch in full-screen mode and attempt to connect to the Windows server.
