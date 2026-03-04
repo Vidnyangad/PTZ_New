@@ -123,5 +123,12 @@ You can check the background logs at any time using: `sudo journalctl -u ptzcame
 
 - **"Failed to connect to camera stream":** Ensure the Pi's IP is allowed by the camera (if it has IP filtering) and that the Pi is on the exact same subnet as the camera.
 - **`ModuleNotFoundError: No module named 'cv2'`:** This means your virtual environment was created without the `--system-site-packages` flag. Delete the `venv` folder and recreate it using `python3 -m venv --system-site-packages venv`.
+- **`No such file: .../wsdl/devicemgmt.wsdl` (ONVIF Error):** Sometimes `pip` fails to bundle the required XML WSDL files for the camera commands. To fix this, download them directly into the project folder by running:
+  ```bash
+  git clone https://github.com/FalkTannhaeuser/python-onvif-zeep.git /tmp/onvif-src
+  cp -r /tmp/onvif-src/wsdl ./wsdl
+  rm -rf /tmp/onvif-src
+  ```
+  The PTZ controller will automatically detect and use this local `wsdl` folder instead of the broken pip one.
 - **"FFmpeg failed":** If you get an error when saving the motion video, verify that `montage.mp4` and `audio.mp3` are definitely located inside the exact path defined by `RECORDINGS_DIR`.
 - **Sluggish Performance:** If the 720p resizing and FFmpeg rendering feels slightly slower on the Pi than your PC, ensure you are using a good quality power supply for the Pi 4 (5.1V 3A) so it doesn't dynamically throttle its CPU speed.
