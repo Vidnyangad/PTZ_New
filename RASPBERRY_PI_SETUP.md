@@ -20,12 +20,12 @@ Follow this step-by-step guide to get everything running perfectly on your Raspb
 
 Your application relies on OpenCV and FFmpeg for video processing. These require several underlying C++ libraries to function on Linux.
 
-Install Python 3, pip, git, FFmpeg, and OpenCV system dependencies by running:
+Install Python 3, pip, git, FFmpeg, and the pre-compiled Python packages for OpenCV and Numpy by running:
 ```bash
-sudo apt install -y python3 python3-pip python3-venv git ffmpeg libsm6 libxext6 libxrender-dev libgl1 libglib2.0-0
+sudo apt install -y python3 python3-pip python3-venv git ffmpeg python3-opencv python3-numpy
 ```
 
-*Note: `ffmpeg` is absolutely crucial here, as it replaces the Windows executable you were previously using to generate the `latest.mp4` montage.*
+*Note: `ffmpeg` is absolutely crucial here, as it performs the video fade, audio swap, and montage combination at the end of the recording sequence.*
 
 ## 3. Download the Codebase
 
@@ -38,20 +38,19 @@ cd PTZ_New
 
 ## 4. Setup Python Virtual Environment
 
-It is best practice to install Python packages in a virtual environment on Linux to prevent system conflicts.
+Because compiling `numpy` and `opencv-python` via `pip` takes hours and often crashes lower-memory Raspberry Pi models (like the 1GB RAM Pi 4), it is highly recommended to use the globally installed `apt` versions of these packages alongside a virtual environment.
 
 ```bash
-# Create a virtual environment named 'venv'
-python3 -m venv venv
+# Create a virtual environment that INCLUDES the system OpenCV and Numpy packages
+python3 -m venv --system-site-packages venv
 
 # Activate the virtual environment
 source venv/bin/activate
 
-# Install the Python requirements
-pip install -r requirements.txt
+# Install ONLY the lightweight remaining dependencies via pip
+# (We skip the full requirements.txt so pip doesn't try to recompile Numpy!)
+pip install Flask==3.0.0 onvif-zeep==0.2.12
 ```
-
-*Note: If `opencv-python` fails to build or takes too long, you can optionally use the pre-built Linux headless version by running: `pip uninstall opencv-python && pip install opencv-python-headless`.*
 
 ## 5. Modify Hardcoded Windows Paths (IMPORTANT)
 
@@ -123,11 +122,6 @@ You can check the background logs at any time using: `sudo journalctl -u ptzcame
 ## Troubleshooting
 
 - **"Failed to connect to camera stream":** Ensure the Pi's IP is allowed by the camera (if it has IP filtering) and that the Pi is on the exact same subnet as the camera.
-- **`pip install` stuck at "Preparing metadata (pyproject.toml)":** This happens on the 1GB RAM model of the Pi 4 because the system runs out of memory compiling dependencies (like `lxml`). To fix this, temporarily increase your swap size:
-  1. `sudo dphys-swapfile swapoff`
-  2. `sudo nano /etc/dphys-swapfile`
-  3. Change `CONF_SWAPSIZE=100` to `CONF_SWAPSIZE=1024`
-  4. `sudo dphys-swapfile setup` and then `sudo dphys-swapfile swapon`
-  5. Retry `pip install -r requirements.txt`.
+- **`ModuleNotFoundError: No module named 'cv2'`:** This means your virtual environment was created without the `--system-site-packages` flag. Delete the `venv` folder and recreate it using `python3 -m venv --system-site-packages venv`.
 - **"FFmpeg failed":** If you get an error when saving the motion video, verify that `montage.mp4` and `audio.mp3` are definitely located inside the exact path defined by `RECORDINGS_DIR`.
 - **Sluggish Performance:** If the 720p resizing and FFmpeg rendering feels slightly slower on the Pi than your PC, ensure you are using a good quality power supply for the Pi 4 (5.1V 3A) so it doesn't dynamically throttle its CPU speed.
