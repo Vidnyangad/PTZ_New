@@ -70,6 +70,21 @@ video_capture = VideoCapture(
 )
 motion_engine = MotionEngine(ptz)
 
+# Global states for tracking the system status (for the Pi viewer)
+# states: 'idle', 'recording', 'processing', 'playback'
+server_state = 'idle'
+state_lock = threading.Lock()
+
+def set_server_state(new_state):
+    global server_state
+    with state_lock:
+        server_state = new_state
+        print(f"Server state changed to: {server_state}")
+
+def get_server_state():
+    with state_lock:
+        return server_state
+
 # Global state for automated motion sequence status
 automated_motion_active = False
 
@@ -169,10 +184,42 @@ def generate_frames():
         last_time = time.time()
 
 
+# ================= ROUTES =================
+
 @app.route('/')
 def index():
-    """Render main page"""
+    """Render main page (Remote Control Interface)"""
     return render_template('index.html')
+
+@app.route('/api/viewer/state', methods=['GET'])
+def get_viewer_state():
+    """API endpoint for Pi viewer to poll current status"""
+    current_state = get_server_state()
+
+    # If a manual recording is active and not triggered by motion recipe
+    if current_state == 'idle' and video_capture.is_recording():
+        return jsonify({'state': 'recording'})
+
+    return jsonify({
+        'state': current_state,
+        'is_active': automated_motion_active or motion_engine.is_running
+    })
+
+@app.route('/api/viewer/trigger_playback', methods=['POST'])
+def trigger_playback():
+    """Trigger playback of latest.mp4 on the remote viewer"""
+    # Temporarily set state to playback to trigger the Pi
+    set_server_state('playback')
+
+    # Reset back to idle after 2 seconds (giving the Pi enough time to poll and start playing)
+    def reset_idle():
+        time.sleep(2)
+        if get_server_state() == 'playback':
+            set_server_state('idle')
+
+    threading.Thread(target=reset_idle, daemon=True).start()
+
+    return jsonify({'success': True, 'message': 'Playback triggered'})
 
 
 @app.route('/api/recording/start', methods=['POST'])
@@ -423,6 +470,7 @@ def record_motion():
         global automated_motion_active
         try:
             automated_motion_active = True
+            set_server_state('recording')
 
             # Start recording
             video_capture.start_recording()
@@ -442,12 +490,27 @@ def record_motion():
             # Stop recording
             recorded_filename = video_capture.stop_recording()
 
+            # Change state to processing
+            set_server_state('processing')
+
             # Run final video processing with FFmpeg
             recorded_path = os.path.join(RECORDINGS_DIR, recorded_filename)
             video_processor.process_final_video(recorded_path, RECORDINGS_DIR)
 
+            # Change state to playback so the Pi immediately plays the new video
+            set_server_state('playback')
+
+            # Reset back to idle after 2 seconds
+            def reset_idle():
+                time.sleep(2)
+                if get_server_state() == 'playback':
+                    set_server_state('idle')
+
+            threading.Thread(target=reset_idle, daemon=True).start()
+
         except Exception as e:
             print(f"Error in record and play motion: {e}")
+            set_server_state('idle')
             try:
                 # Cleanup if recording is still active
                 if video_capture.is_recording():
