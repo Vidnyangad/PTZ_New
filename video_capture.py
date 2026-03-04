@@ -2,12 +2,6 @@
 Video Capture Module
 Handles video stream recording from IP camera
 """
-import os
-
-# Ensure FFmpeg uses TCP to prevent "Stream ends prematurely" dropped packets on Raspberry Pi
-# MUST be set before importing cv2
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay"
-
 import cv2
 import threading
 import time
@@ -187,9 +181,7 @@ class VideoCapture:
             print(f"Trying to connect to: {url}")
             
             try:
-                # Force FFmpeg backend. GStreamer (the default on RPi) crashes
-                # on failed connections with "element pipeline... is in READY instead of the NULL state"
-                cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
+                cap = cv2.VideoCapture(url)
                 
                 # Try to read a test frame
                 ret, frame = cap.read()

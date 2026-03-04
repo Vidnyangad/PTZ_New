@@ -4,20 +4,6 @@ Flask Application for PTZ Camera Control and Video Recording
 from flask import Flask, render_template, jsonify, request, send_from_directory, Response
 from datetime import datetime
 import os
-
-# ================= SUPPRESS OPENCV/FFMPEG WARNINGS =================
-# Set these BEFORE importing cv2 so the C++ backend reads them correctly on Linux
-os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'
-os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-    "rtsp_transport;tcp|"      # TCP is critical for Raspberry Pi
-    "fflags;nobuffer|"
-    "flags;low_delay|"
-    "max_delay;0|"
-    "analyzeduration;0|"
-    "probesize;32"
-)
-
 import cv2
 import time
 import threading
@@ -28,9 +14,24 @@ from motion_engine import MotionEngine
 from recipes.sample_recipe import recipe as sample_recipe
 import video_processor
 
+# ================= SUPPRESS OPENCV/FFMPEG WARNINGS =================
+# Suppress H.264 decoding errors (normal for RTSP streams)
+os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'
+os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'  # Only show errors, not warnings
+
 # Set FFmpeg log level to quiet (suppress H.264 decode errors)
 import warnings
 warnings.filterwarnings('ignore')
+
+# ================= LOW LATENCY RTSP =================
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+    "rtsp_transport;tcp|"      # Changed to TCP for more reliability
+    "fflags;nobuffer|"
+    "flags;low_delay|"
+    "max_delay;0|"
+    "analyzeduration;0|"       # Don't analyze stream (faster startup)
+    "probesize;32"             # Minimal probe (faster startup)
+)
 
 # Suppress Flask development server warnings
 log = logging.getLogger('werkzeug')
@@ -89,15 +90,6 @@ def get_server_state():
 automated_motion_active = False
 
 # ================= LIVE STREAM WITH SEPARATE THREAD =================
-import numpy as np
-
-# Create a static placeholder frame to save CPU during background rendering
-_placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
-cv2.putText(_placeholder, 'Motion Sequence Active', (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-cv2.putText(_placeholder, 'Live view paused to maximize CPU.', (50, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 1)
-cv2.putText(_placeholder, 'Please wait for rendering to finish...', (50, 300), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 1)
-_, _placeholder_jpeg = cv2.imencode('.jpg', _placeholder, [cv2.IMWRITE_JPEG_QUALITY, 50])
-PROCESSING_FRAME_BYTES = _placeholder_jpeg.tobytes()
 
 def capture_loop():
     """Continuous frame capture in separate thread with error recovery"""
@@ -154,14 +146,6 @@ def generate_frames():
     last_time = time.time()
     
     while True:
-        if automated_motion_active:
-            # Yield the pre-encoded static frame to save CPU
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + PROCESSING_FRAME_BYTES + b'\r\n')
-            time.sleep(1.0) # 1 FPS is plenty for a static image
-            last_time = time.time()
-            continue
-
         with frame_lock:
             frame = None if latest_frame is None else latest_frame.copy()
         
