@@ -140,33 +140,61 @@ MIT License - Feel free to modify and use as needed.
 
 ## Running on Boot (Start Automatically)
 
-To make the system truly headless, you can configure both the Windows Server and the Raspberry Pi to launch their respective scripts automatically whenever they are turned on.
+To make the system truly headless and resilient, you can install the components as background services that start automatically when the machines boot.
 
-### 1. Windows Server (Start `app.py` on Boot)
-The best way to run a Python script automatically in the background on Windows is using the **Task Scheduler**.
+### 1. Windows Server (NSSM Service)
+We recommend using [NSSM (Non-Sucking Service Manager)](https://nssm.cc/) to install the Flask application as a true Windows background service.
 
-1. Open the Windows Start menu, type **Task Scheduler**, and open it.
-2. In the right pane, click **Create Basic Task...**
-3. **Name:** `PTZ Camera Server` -> Click Next.
-4. **Trigger:** Select **When the computer starts** -> Click Next.
-5. **Action:** Select **Start a program** -> Click Next.
-6. **Program/script:** Type the path to your Python executable (e.g., `C:\Python39\python.exe` or simply `python` if it's in your system PATH).
-7. **Add arguments:** Type `app.py`
-8. **Start in:** Type the full path to your project folder (e.g., `C:\Users\YourName\Documents\PTZ_New`).
-9. Click **Finish**.
-10. To ensure it runs in the background without a command window, double-click your new task in the Task Scheduler Library, and on the General tab, check **Run whether user is logged on or not** and **Hidden**. Click OK.
+1. Download NSSM and extract the `nssm.exe` file (from the `win64` folder) to your project directory.
+2. Open a Command Prompt as **Administrator**.
+3. Navigate to your project folder and run the installation command:
+   ```cmd
+   cd C:\path\to\PTZ_New
+   nssm install PTZCameraServer
+   ```
+4. A graphical interface will open. Configure the following:
+   - **Path:** Browse and select your `python.exe` (e.g., `C:\Python39\python.exe`).
+   - **Arguments:** `app.py`
+   - **Details Tab -> Display name:** `PTZ Camera Server`
+5. Click **Install service**.
+6. You can now start the service from the Windows Services app (`services.msc`), or by running: `nssm start PTZCameraServer`. The server will now automatically run in the background every time Windows boots.
 
-### 2. Raspberry Pi Viewer (Start `pi_viewer.py` on Boot)
-Because the Pi viewer requires the graphical desktop (X11/Wayland) to display OpenCV windows and VLC video playback, we use an **autostart** configuration rather than a headless background service.
+### 2. Raspberry Pi Viewer (systemd Service)
+To run the `pi_viewer.py` script automatically on the Raspberry Pi, we will create a systemd service. Because the viewer requires the graphical desktop to display OpenCV windows and VLC playback on the HDMI port, we must explicitly pass the `DISPLAY` environment variable to the service.
 
 1. Open a terminal on your Raspberry Pi.
-2. Create or edit the autostart file for the current user:
+2. Create a new systemd service file:
    ```bash
-   mkdir -p ~/.config/autostart
-   echo "[Desktop Entry]" > ~/.config/autostart/ptzviewer.desktop
-   echo "Type=Application" >> ~/.config/autostart/ptzviewer.desktop
-   echo "Name=PTZ Viewer" >> ~/.config/autostart/ptzviewer.desktop
-   echo "Exec=/usr/bin/python3 /home/pi/PTZ_New/pi_viewer.py" >> ~/.config/autostart/ptzviewer.desktop
-   echo "Terminal=false" >> ~/.config/autostart/ptzviewer.desktop
+   sudo nano /etc/systemd/system/ptzviewer.service
    ```
-3. Reboot the Pi (`sudo reboot`). When the desktop environment loads, the Python script will automatically launch in full-screen mode and attempt to connect to the Windows server.
+3. Paste the following configuration (assuming your username is `pi` and your code is in `/home/pi/PTZ_New`):
+   ```ini
+   [Unit]
+   Description=PTZ Camera Fullscreen Viewer
+   After=graphical.target
+   Wants=graphical.target
+
+   [Service]
+   Type=simple
+   User=pi
+   Environment="DISPLAY=:0"
+   Environment="XAUTHORITY=/home/pi/.Xauthority"
+   WorkingDirectory=/home/pi/PTZ_New
+   ExecStart=/usr/bin/python3 /home/pi/PTZ_New/pi_viewer.py
+   Restart=always
+   RestartSec=5
+
+   [Install]
+   WantedBy=graphical.target
+   ```
+4. Save the file (`Ctrl+O`, `Enter`, `Ctrl+X`).
+5. Reload the systemd daemon to recognize the new service:
+   ```bash
+   sudo systemctl daemon-reload
+   ```
+6. Enable the service to run on boot, and start it immediately:
+   ```bash
+   sudo systemctl enable ptzviewer.service
+   sudo systemctl start ptzviewer.service
+   ```
+7. You can check the logs of the viewer at any time by running: `sudo journalctl -u ptzviewer.service -f`
