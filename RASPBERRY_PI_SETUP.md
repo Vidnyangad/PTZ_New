@@ -49,7 +49,7 @@ source venv/bin/activate
 
 # Install ONLY the lightweight remaining dependencies via pip
 # (We skip the full requirements.txt so pip doesn't try to recompile Numpy!)
-pip install Flask==3.0.0 onvif-zeep==0.2.12
+pip install "Flask>=3.0.0" "onvif-zeep==0.2.12"
 ```
 
 ## 5. Modify Hardcoded Windows Paths (IMPORTANT)
