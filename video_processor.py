@@ -50,18 +50,16 @@ def process_final_video(recorded_video_path, recordings_dir):
 
     # FFmpeg command breakdown:
     # -i {recorded} -i {montage} -i {audio}: Inputs 0, 1, and 2
-    # [0:v]scale=1280:720,fps=25,fade=...[v0]: Resize recorded video to 720p 25fps, then fade it out
-    # [1:v]scale=1280:720,fps=25[v1]: Resize/conform montage video to exactly 720p 25fps to match
-    # [v0][v1]concat=n=2:v=1:a=0[vout]: Concatenate the two normalized videos safely
+    # [0:v]fade=t=out:st={fade_start}:d={fade_duration}[v0]: Apply fade out to the first video
+    # [v0][1:v]concat=n=2:v=1:a=0[vout]: Concatenate the faded video and montage
     # -map "[vout]" -map 2:a: Map the concatenated video and the audio file
     # -shortest: Stop encoding when the shortest stream ends (usually the audio or video)
     # -c:v libx264 -c:a aac: Re-encode using standard codecs for high compatibility
     # -y: Overwrite output file
 
     filter_complex = (
-        f"[0:v]scale=1280:720,fps=25,fade=t=out:st={fade_start}:d={fade_duration}[v0];"
-        f"[1:v]scale=1280:720,fps=25[v1];"
-        f"[v0][v1]concat=n=2:v=1:a=0[vout]"
+        f"[0:v]fade=t=out:st={fade_start}:d={fade_duration}[v0];"
+        f"[v0][1:v]concat=n=2:v=1:a=0[vout]"
     )
 
     cmd = [
