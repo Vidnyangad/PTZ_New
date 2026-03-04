@@ -130,8 +130,10 @@ http://YOUR_COMPUTER_IP:5000
 ### Automated Motion Video Capture
 1. Go to the "Motion Recipe" section on the dashboard
 2. Click **"Save Motion Video"**
-3. The server will begin instantaneously appending incoming frames to a recording file and subsequently run a predefined sequence of PTZ movements (a motion recipe).
+3. The server will begin instantaneously appending incoming frames to a 720p (1280x720) recording file and subsequently run a predefined sequence of PTZ movements (a motion recipe).
 4. Recording stops automatically once the motion sequence is finished. Because recording does not require a new RTSP connection under the hood, this process is smooth, instantaneous, and network-efficient.
+5. **Post-Processing:** Upon completion, the backend will automatically invoke `FFmpeg` to fade out the last 1 second of the clip, append `montage.mp4` to the timeline, completely overwrite the track with `audio.mp3`, and output the final video as `latest.mp4`.
+    - Note: For post-processing to work, you must ensure you have `ffmpeg` installed on your system. You must also place your `montage.mp4` and `audio.mp3` files in your configured `RECORDINGS_DIR` (e.g. `C:\SavedPTZVideos\`).
 
 ### PTZ Control
 

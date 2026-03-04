@@ -121,12 +121,15 @@ class VideoCapture:
                 self._is_recording = False
                 return
 
-            frame_height, frame_width = frame.shape[:2]
+            # Explicitly force exactly 720p resolution for output video
+            frame_width = 1280
+            frame_height = 720
+
             fps = 25
             frame_interval = 1 / fps
             next_frame_time = time.time()
 
-            print(f"Recording at {frame_width}x{frame_height} @ {fps}fps")
+            print(f"Recording at {frame_width}x{frame_height} @ {fps}fps (Resized to 720p)")
 
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             out = cv2.VideoWriter(filepath, fourcc, fps, (frame_width, frame_height))
@@ -144,7 +147,9 @@ class VideoCapture:
                 frame = self.frame_provider()
 
                 if frame is not None:
-                    out.write(frame)
+                    # Resize frame to exact dimensions (720p) before writing
+                    resized_frame = cv2.resize(frame, (frame_width, frame_height))
+                    out.write(resized_frame)
                     frame_count += 1
 
                 next_frame_time = start_time + frame_count * frame_interval
