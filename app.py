@@ -4,20 +4,6 @@ Flask Application for PTZ Camera Control and Video Recording
 from flask import Flask, render_template, jsonify, request, send_from_directory, Response
 from datetime import datetime
 import os
-
-# ================= SUPPRESS OPENCV/FFMPEG WARNINGS =================
-# Set these BEFORE importing cv2 so the C++ backend reads them correctly on Linux
-os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'
-os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-    "rtsp_transport;tcp|"      # TCP is critical for Raspberry Pi
-    "fflags;nobuffer|"
-    "flags;low_delay|"
-    "max_delay;0|"
-    "analyzeduration;0|"
-    "probesize;32"
-)
-
 import cv2
 import time
 import threading
@@ -28,9 +14,24 @@ from motion_engine import MotionEngine
 from recipes.sample_recipe import recipe as sample_recipe
 import video_processor
 
+# ================= SUPPRESS OPENCV/FFMPEG WARNINGS =================
+# Suppress H.264 decoding errors (normal for RTSP streams)
+os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'
+os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'  # Only show errors, not warnings
+
 # Set FFmpeg log level to quiet (suppress H.264 decode errors)
 import warnings
 warnings.filterwarnings('ignore')
+
+# ================= LOW LATENCY RTSP =================
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+    "rtsp_transport;tcp|"      # Changed to TCP for more reliability
+    "fflags;nobuffer|"
+    "flags;low_delay|"
+    "max_delay;0|"
+    "analyzeduration;0|"       # Don't analyze stream (faster startup)
+    "probesize;32"             # Minimal probe (faster startup)
+)
 
 # Suppress Flask development server warnings
 log = logging.getLogger('werkzeug')
@@ -70,19 +71,25 @@ video_capture = VideoCapture(
 )
 motion_engine = MotionEngine(ptz)
 
+# Global states for tracking the system status (for the Pi viewer)
+# states: 'idle', 'recording', 'processing', 'playback'
+server_state = 'idle'
+state_lock = threading.Lock()
+
+def set_server_state(new_state):
+    global server_state
+    with state_lock:
+        server_state = new_state
+        print(f"Server state changed to: {server_state}")
+
+def get_server_state():
+    with state_lock:
+        return server_state
+
 # Global state for automated motion sequence status
 automated_motion_active = False
 
 # ================= LIVE STREAM WITH SEPARATE THREAD =================
-import numpy as np
-
-# Create a static placeholder frame to save CPU during background rendering
-_placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
-cv2.putText(_placeholder, 'Motion Sequence Active', (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-cv2.putText(_placeholder, 'Live view paused to maximize CPU.', (50, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 1)
-cv2.putText(_placeholder, 'Please wait for rendering to finish...', (50, 300), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 1)
-_, _placeholder_jpeg = cv2.imencode('.jpg', _placeholder, [cv2.IMWRITE_JPEG_QUALITY, 50])
-PROCESSING_FRAME_BYTES = _placeholder_jpeg.tobytes()
 
 def capture_loop():
     """Continuous frame capture in separate thread with error recovery"""
@@ -139,14 +146,6 @@ def generate_frames():
     last_time = time.time()
     
     while True:
-        if automated_motion_active:
-            # Yield the pre-encoded static frame to save CPU
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + PROCESSING_FRAME_BYTES + b'\r\n')
-            time.sleep(1.0) # 1 FPS is plenty for a static image
-            last_time = time.time()
-            continue
-
         with frame_lock:
             frame = None if latest_frame is None else latest_frame.copy()
         
@@ -169,10 +168,42 @@ def generate_frames():
         last_time = time.time()
 
 
+# ================= ROUTES =================
+
 @app.route('/')
 def index():
-    """Render main page"""
+    """Render main page (Remote Control Interface)"""
     return render_template('index.html')
+
+@app.route('/api/viewer/state', methods=['GET'])
+def get_viewer_state():
+    """API endpoint for Pi viewer to poll current status"""
+    current_state = get_server_state()
+
+    # If a manual recording is active and not triggered by motion recipe
+    if current_state == 'idle' and video_capture.is_recording():
+        return jsonify({'state': 'recording'})
+
+    return jsonify({
+        'state': current_state,
+        'is_active': automated_motion_active or motion_engine.is_running
+    })
+
+@app.route('/api/viewer/trigger_playback', methods=['POST'])
+def trigger_playback():
+    """Trigger playback of latest.mp4 on the remote viewer"""
+    # Temporarily set state to playback to trigger the Pi
+    set_server_state('playback')
+
+    # Reset back to idle after 2 seconds (giving the Pi enough time to poll and start playing)
+    def reset_idle():
+        time.sleep(2)
+        if get_server_state() == 'playback':
+            set_server_state('idle')
+
+    threading.Thread(target=reset_idle, daemon=True).start()
+
+    return jsonify({'success': True, 'message': 'Playback triggered'})
 
 
 @app.route('/api/recording/start', methods=['POST'])
@@ -423,6 +454,7 @@ def record_motion():
         global automated_motion_active
         try:
             automated_motion_active = True
+            set_server_state('recording')
 
             # Start recording
             video_capture.start_recording()
@@ -442,12 +474,27 @@ def record_motion():
             # Stop recording
             recorded_filename = video_capture.stop_recording()
 
+            # Change state to processing
+            set_server_state('processing')
+
             # Run final video processing with FFmpeg
             recorded_path = os.path.join(RECORDINGS_DIR, recorded_filename)
             video_processor.process_final_video(recorded_path, RECORDINGS_DIR)
 
+            # Change state to playback so the Pi immediately plays the new video
+            set_server_state('playback')
+
+            # Reset back to idle after 2 seconds
+            def reset_idle():
+                time.sleep(2)
+                if get_server_state() == 'playback':
+                    set_server_state('idle')
+
+            threading.Thread(target=reset_idle, daemon=True).start()
+
         except Exception as e:
             print(f"Error in record and play motion: {e}")
+            set_server_state('idle')
             try:
                 # Cleanup if recording is still active
                 if video_capture.is_recording():

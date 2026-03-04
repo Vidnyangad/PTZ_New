@@ -133,13 +133,8 @@ button:disabled {
 
 <div class="main-container">
 
-    <!-- Video -->
-    <div class="video-container">
-        <img src="/video_feed">
-    </div>
-
-    <!-- Controls -->
-    <div class="control-panel">
+    <!-- Controls (Full Width for Remote) -->
+    <div class="control-panel" style="width: 100%; max-width: 600px; margin: 0 auto;">
 
         <!-- Manual Movement -->
         <div class="section">
@@ -186,14 +181,19 @@ button:disabled {
                 <button class="secondary disableable" onclick="playMotion()">Play Motion Recipe</button>
                 <button class="secondary disableable" onclick="saveMotionVideo()">Save Motion Video</button>
             </div>
+
+            <div class="preset-row" style="margin-top: 10px;">
+                <button class="danger disableable" id="replayBtn" onclick="triggerPlayback()">Replay Latest Video</button>
+            </div>
+            <div id="statusText" style="margin-top: 10px; font-size: 14px; color: #ffeb3b; min-height: 20px;"></div>
         </div>
 
         <!-- Recording -->
         <div class="section">
-            <h3>Recording</h3>
+            <h3>Manual Recording</h3>
             <div class="preset-row">
                 <button class="disableable" onclick="startRecording()">Start Recording</button>
-                <button class="disableable" onclick="stopRecording()">Stop Recording</button>
+                <button class="stop-record-btn" onclick="stopRecording()">Stop Recording</button>
             </div>
         </div>
 
@@ -260,15 +260,46 @@ function stopRecording() {
     fetch('/api/recording/stop', { method: 'POST' });
 }
 
+// Playback
+function triggerPlayback() {
+    fetch('/api/viewer/trigger_playback', { method: 'POST' });
+}
+
 // Status Polling for UI Updates
 function checkMotionStatus() {
-    fetch('/api/motion/status')
+    fetch('/api/viewer/state')
         .then(response => response.json())
         .then(data => {
             const disableableButtons = document.querySelectorAll('.disableable');
+
+            // Disable buttons if recording, processing, or if a motion sequence is running
+            const isBusy = data.state === 'recording' || data.state === 'processing' || data.is_active;
+
             disableableButtons.forEach(button => {
-                button.disabled = data.is_active;
+                button.disabled = isBusy;
             });
+
+            // The Stop Recording button is only disabled if a motion sequence is actively managing the recording
+            const stopBtn = document.querySelector('.stop-record-btn');
+            if (stopBtn) {
+                stopBtn.disabled = data.is_active || data.state === 'processing' || data.state === 'playback';
+            }
+
+            // Update status text
+            const statusText = document.getElementById('statusText');
+            if (data.state === 'idle') {
+                statusText.innerText = 'System Idle';
+                statusText.style.color = '#a5d6a7';
+            } else if (data.state === 'recording') {
+                statusText.innerText = 'Recording Video...';
+                statusText.style.color = '#ef5350';
+            } else if (data.state === 'processing') {
+                statusText.innerText = 'Processing Final Video (FFmpeg)...';
+                statusText.style.color = '#ffb74d';
+            } else if (data.state === 'playback') {
+                statusText.innerText = 'Playing latest video on external display...';
+                statusText.style.color = '#64b5f6';
+            }
         })
         .catch(error => console.error('Error fetching motion status:', error));
 }

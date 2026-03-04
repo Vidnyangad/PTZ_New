@@ -1,278 +1,200 @@
-# PTZ Camera Controller & Video Recorder
+# PTZ Camera Centralized Controller & Remote Viewer
 
-A Flask-based web application for controlling PTZ (Pan-Tilt-Zoom) cameras and recording video streams.
+A distributed application for controlling PTZ (Pan-Tilt-Zoom) cameras, recording video streams, and automating motion sequences.
+
+This project is built on a **split-architecture** design:
+1. A central **Windows Server** handles all heavy lifting (video capture, FFmpeg processing, API hosting, and PTZ controls).
+2. A lightweight **Raspberry Pi Viewer** acts as a digital signage thin-client, displaying the live camera feed, recording indicators, and playing back the final automated videos.
+3. The **Web Interface** acts purely as a remote control panel (without the live video feed) to trigger movements and recordings.
+
+---
 
 ## Features
 
-- **Live Video Feed**: Real-time camera view displayed on the web interface
-- **Video Recording**: Start/stop recording with automatic file naming (MP4 format)
-- **PTZ Control**: 
-  - 8-directional movement control
-  - Zoom in/out
-  - Preset positions (save and recall)
-- **Motion Recipes**: Create custom, automated sequences of PTZ commands
-- **Automated Motion Video Capture**: One-click combination of automatic recording and executing a motion recipe
-- **Web Interface**: Clean, responsive, uniform flexbox UI for all controls
-- **Recording Management**: View and download all recordings
+- **Centralized Processing**: Zero video processing or OpenCV load on the Raspberry Pi; all recording and FFmpeg rendering happens on the Windows machine.
+- **Dedicated Remote Control UI**: A responsive, uniform flexbox web interface for executing PTZ commands and starting recordings.
+- **Automated Motion Sequences**: Create custom sequences of PTZ commands ("recipes") synced perfectly with video recording.
+- **Smart Digital Signage (Pi Viewer)**:
+  - Streams the live MJPEG feed from the Windows server.
+  - Automatically displays a dynamic "Recording" GIF when sequences are active.
+  - Hardware-accelerated playback of the final `latest.mp4` video directly on the TV/Monitor upon completion.
+  - Fallback synthetic OpenCV GIF generation if real GIF assets aren't present.
 
-## Video Format: MP4 vs AVI
-
-The application uses **MP4** format for recordings. Here's why:
-
-### MP4 Advantages:
-- ✅ **Better compression**: Smaller file sizes (typically 50-70% smaller than AVI)
-- ✅ **Universal compatibility**: Works on all devices, browsers, and media players
-- ✅ **Streaming support**: Can start playing before fully downloaded
-- ✅ **Modern standard**: Better metadata support
-
-### AVI Characteristics:
-- ⚠️ **Larger files**: Minimal compression, takes more disk space
-- ✅ **Simpler format**: Less processing overhead during recording
-- ⚠️ **Limited browser support**: May not play directly in some browsers
-
-**Recommendation**: MP4 is better for most use cases. Only switch to AVI if you need uncompressed footage for editing or have compatibility issues with MP4.
+---
 
 ## System Architecture
 
-The application is split into three main modules:
+The application is split into two primary nodes:
 
-1. **app.py**: Main Flask application and API endpoints. It manages a persistent background thread that continuously reads frames from the camera. This ensures a stable stream connection.
-2. **ptz_controller.py**: PTZ camera control (supports HTTP API and ONVIF)
-3. **video_capture.py**: Video stream capture and recording using OpenCV. It now utilizes a shared frame-provider model—when recording begins, it seamlessly writes the pre-fetched frames from `app.py` directly to the output file rather than spinning up a redundant camera connection.
+### 1. The Windows Server (`app.py`)
+- Manages a persistent background thread that continuously reads frames from the camera.
+- Exposes API endpoints for PTZ movement (`ptz_controller.py`) and motion recipes (`motion_engine.py`).
+- Saves high-res MP4 video directly to disk (e.g., `C:\SavedPTZVideos`).
+- Executes FFmpeg (`video_processor.py`) to fade, append montages, and add audio.
+- Exposes the `/api/viewer/state` endpoint to orchestrate the remote display.
 
-## Installation
+### 2. The Raspberry Pi Display (`pi_viewer.py`)
+- Connected via HDMI to a television or monitor.
+- Runs an un-throttled OpenCV window to display the live feed.
+- Polls the Windows server state every second to switch between Live View, Recording Indicators, and Video Playback (via `cvlc` / VLC).
+
+---
+
+## Installation: Windows Server (Backend)
 
 ### Prerequisites
-
-- Python 3.8 or higher
-- Network access to your PTZ camera
-- Camera must support RTSP or HTTP video streaming
+- Python 3.8+
+- Network access to your PTZ camera (RTSP / HTTP)
+- [FFmpeg installed](https://ffmpeg.org/download.html) and added to your system PATH.
 
 ### Setup
-
 1. **Install dependencies**:
 ```bash
 pip install -r requirements.txt
 ```
 
-2. **Configure camera settings** in `app.py`:
+2. **Configure Settings** in `app.py`:
 ```python
-CAMERA_IP = "192.168.1.11"        # Your camera IP
-CAMERA_USER = "admin"              # Camera username
-CAMERA_PASSWORD = "admin"          # Camera password
-RECORDINGS_DIR = "recordings"      # Where to save videos
+CAMERA_IP = "192.168.1.11"         # Your camera IP
+CAMERA_USER = "admin"               # Camera username
+CAMERA_PASSWORD = "password"        # Camera password
+RECORDINGS_DIR = r"C:\SavedPTZVideos" # Where to save and render videos
 ```
 
-3. **Create recordings directory**:
-```bash
-mkdir recordings
-```
+3. **Ensure Output Directories & Assets Exist**:
+Create the directory above. If you plan to use the automated "Motion Video" feature, you **must** place a `montage.mp4` and `audio.mp3` inside that folder, or the post-processing will fail.
 
-## Camera Configuration
-
-### Finding Your Camera's Stream URL
-
-Different camera manufacturers use different streaming URLs. The application tries multiple common formats, but you may need to customize the URLs in `video_capture.py`:
-
-```python
-self.stream_urls = [
-    f"rtsp://{username}:{password}@{camera_ip}:554/stream1",
-    f"rtsp://{username}:{password}@{camera_ip}:554/cam/realmonitor?channel=1&subtype=0",
-    # Add your camera's specific URL here
-]
-```
-
-Common formats by manufacturer:
-- **Dahua**: `rtsp://user:pass@ip:554/cam/realmonitor?channel=1&subtype=0`
-- **Hikvision**: `rtsp://user:pass@ip:554/Streaming/Channels/101`
-- **Axis**: `rtsp://user:pass@ip/axis-media/media.amp`
-- **Foscam**: `rtsp://user:pass@ip:554/videoMain`
-
-### PTZ Command Configuration
-
-The PTZ controller uses HTTP CGI commands by default. If your camera uses different commands, modify the endpoints in `ptz_controller.py`:
-
-```python
-self.base_url = f"http://{camera_ip}/cgi-bin/ptz.cgi"
-```
-
-For ONVIF support, install the optional library:
-```bash
-pip install onvif-zeep
-```
-
-## Running the Application
-
-1. **Start the Flask server**:
+4. **Run the Server**:
 ```bash
 python app.py
 ```
+*The web interface is now available on your network at `http://YOUR_WINDOWS_IP:5000`.*
 
-2. **Open your browser** and navigate to:
+---
+
+## Installation: Raspberry Pi (Viewer)
+
+### Prerequisites
+- Raspberry Pi connected to a screen via HDMI.
+- VLC Media Player installed (for hardware-accelerated playback).
+
+### Setup
+1. **Install Dependencies**:
+```bash
+sudo apt update
+sudo apt install -y vlc python3-opencv python3-numpy
 ```
-http://localhost:5000
-```
+*(No need to install the heavy `requirements.txt` from the server on the Pi)*
 
-3. **Access from other devices** on your network:
-```
-http://YOUR_COMPUTER_IP:5000
-```
-
-## Usage
-
-### Recording Video
-
-1. Click **"Start Recording"** to begin capturing video
-2. The status will change to "Recording" with a red indicator
-3. Click **"Stop Recording"** to finish
-4. Videos are automatically saved with timestamps
-
-### Automated Motion Video Capture
-1. Go to the "Motion Recipe" section on the dashboard
-2. Click **"Save Motion Video"**
-3. The server will begin instantaneously appending incoming frames to a 720p (1280x720) recording file and subsequently run a predefined sequence of PTZ movements (a motion recipe).
-4. Recording stops automatically once the motion sequence is finished. Because recording does not require a new RTSP connection under the hood, this process is smooth, instantaneous, and network-efficient.
-5. **Post-Processing:** Upon completion, the backend will automatically invoke `FFmpeg` to fade out the last 1 second of the clip, append `montage.mp4` to the timeline, completely overwrite the track with `audio.mp3`, and output the final video as `latest.mp4`.
-    - Note: For post-processing to work, you must ensure you have `ffmpeg` installed on your system. You must also place your `montage.mp4` and `audio.mp3` files in your configured `RECORDINGS_DIR` (e.g. `C:\SavedPTZVideos\`).
-
-### PTZ Control
-
-- Use the **directional arrows** to pan/tilt the camera
-- Hold down the buttons for continuous movement
-- Click **STOP** in the center to halt movement
-- Use **Zoom In/Out** buttons for zoom control
-
-### Presets
-
-1. Move camera to desired position
-2. Click **"Set 1"** (or 2, 3, 4) to save the position
-3. Click **"Goto 1"** to return to that position later
-
-### Viewing Recordings
-
-- All recordings appear in the "Recordings" section
-- Click **Download** to save to your computer
-- Recordings are stored in the `recordings/` directory
-
-## File Structure
-
-```
-.
-├── app.py                  # Main Flask application
-├── ptz_controller.py       # PTZ control module
-├── video_capture.py        # Video recording module
-├── requirements.txt        # Python dependencies
-├── templates/
-│   └── index.html         # Web interface
-└── recordings/            # Saved video files
+2. **Configure Settings** in `pi_viewer.py`:
+Open the file and point it to the IP address of your Windows machine:
+```python
+SERVER_IP = "192.168.1.100"  # Change this to your Windows Server IP
+SERVER_PORT = 5000
 ```
 
-## API Endpoints
+3. **Optional (GIFs)**:
+Place a `recording.gif` and `processing.gif` in the `/tmp/` directory of the Pi for the coolest visual effects. If you don't provide them, the script will automatically generate a synthetic blinking text screen.
 
-### Recording
-- `POST /api/recording/start` - Start recording
-- `POST /api/recording/stop` - Stop recording
-- `GET /api/recording/status` - Get recording status
+4. **Run the Viewer**:
+```bash
+python3 pi_viewer.py
+```
 
-### Motion Recipes
-- `POST /api/motion/play` - Play the default motion recipe (without recording)
-- `POST /api/motion/record` - Start video recording, play the motion recipe, and cleanly stop recording when done
+---
 
-### PTZ Control
-- `POST /api/ptz/move` - Move camera (direction, speed)
-- `POST /api/ptz/stop` - Stop movement
-- `POST /api/ptz/zoom` - Zoom in/out
-- `POST /api/ptz/preset/goto` - Go to preset
-- `POST /api/ptz/preset/set` - Save preset
+## Usage Guide
 
-### Recordings
-- `GET /api/recordings` - List all recordings
-- `GET /recordings/<filename>` - Download recording
+1. **Remote Control**: Open a web browser on your phone, tablet, or laptop and navigate to the Windows server's IP address (e.g. `http://192.168.1.100:5000`).
+2. **Move Camera**: Use the manual directional arrows or presets to frame the shot.
+3. **Save Motion Video**:
+    - Click "Save Motion Video" on the web interface.
+    - The TV connected to the Raspberry Pi will immediately switch from the live feed to the "Recording" GIF.
+    - The camera will perform the pre-programmed pan/tilt sequence.
+    - Once finished, the TV will show "Processing Final Video" while the Windows machine runs FFmpeg.
+    - The fully rendered `latest.mp4` video will automatically play full-screen on the TV.
+4. **Replay Latest Video**: At any time, press the red "Replay Latest Video" button on your web remote to force the Pi to play the last rendered video again.
 
-## Troubleshooting
-
-### Cannot connect to camera stream
-
-1. **Verify camera IP**: Ping the camera
-   ```bash
-   ping 192.168.1.11
-   ```
-
-2. **Check credentials**: Ensure username/password are correct
-
-3. **Test RTSP stream**: Use VLC Media Player
-   - Open Network Stream
-   - Enter: `rtsp://username:password@192.168.1.11:554/stream1`
-
-4. **Check camera settings**: 
-   - RTSP must be enabled in camera settings
-   - Port 554 must be open
-   - Verify stream path in camera documentation
-
-### PTZ commands not working
-
-1. Check camera manufacturer documentation for correct API endpoints
-2. Some cameras require ONVIF protocol instead of HTTP
-3. Verify camera supports PTZ commands (not all IP cameras have PTZ)
-
-### Recording file is empty or corrupted
-
-1. Ensure camera stream is accessible
-2. Check disk space in recordings directory
-3. Try different video codec (change XVID to MJPG in video_capture.py)
-
-### High CPU usage during recording
-
-1. Reduce video resolution in camera settings
-2. Lower FPS (frames per second)
-3. Use hardware encoding if available
+---
 
 ## Customization
 
-### Change video format back to AVI
-
-If you prefer AVI format, in `video_capture.py`, change:
+### Camera Configuration
+Different camera manufacturers use different RTSP stream URLs. If the server cannot connect to the stream, modify the `stream_urls` array in `video_capture.py`:
 ```python
-# Line ~75: Change filename extension
-self.current_filename = f"recording_{timestamp}.avi"
-
-# Line ~100: Change codec
-fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Instead of 'mp4v'
+self.stream_urls = [
+    f"rtsp://{username}:{password}@{camera_ip}:554/stream1", # Standard
+    f"rtsp://{username}:{password}@{camera_ip}:554/cam/realmonitor?channel=1&subtype=0", # Dahua
+]
 ```
 
-### Change video codec
+### Video Codecs
+To change the recording format from MP4 to AVI, edit the `fourcc` codec in `video_capture.py` (e.g., `cv2.VideoWriter_fourcc(*'XVID')`) and change the file extensions.
 
-In `video_capture.py`, modify:
-```python
-fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Current (MP4)
-# Other options:
-# 'XVID' - AVI format (better compatibility with some systems)
-# 'H264' - Better compression (requires ffmpeg)
-# 'MJPG' - Motion JPEG (larger files, better for editing)
-```
-
-### Change output format
-
-Replace `.mp4` with `.avi` for AVI files (and adjust codec accordingly).
-
-### Adjust recording quality
-
-Modify camera's stream settings to change resolution and bitrate.
-
-## Security Notes
-
-- **Change default credentials** in production
-- Use HTTPS for secure communication
-- Implement authentication for the web interface
-- Restrict network access to trusted devices
+---
 
 ## License
-
 MIT License - Feel free to modify and use as needed.
 
-## Support
+---
 
-For issues specific to your camera model, consult your camera's documentation for:
-- RTSP stream URLs
-- PTZ command API
-- Supported protocols (HTTP, ONVIF)
+## Running on Boot (Start Automatically)
+
+To make the system truly headless and resilient, you can install the components as background services that start automatically when the machines boot.
+
+### 1. Windows Server (NSSM Service)
+We recommend using [NSSM (Non-Sucking Service Manager)](https://nssm.cc/) to install the Flask application as a true Windows background service.
+
+1. Download NSSM and extract the `nssm.exe` file (from the `win64` folder) to your project directory.
+2. Open a Command Prompt as **Administrator**.
+3. Navigate to your project folder and run the installation command:
+   ```cmd
+   cd C:\path\to\PTZ_New
+   nssm install PTZCameraServer
+   ```
+4. A graphical interface will open. Configure the following:
+   - **Path:** Browse and select your `python.exe` (e.g., `C:\Python39\python.exe`).
+   - **Arguments:** `app.py`
+   - **Details Tab -> Display name:** `PTZ Camera Server`
+5. Click **Install service**.
+6. You can now start the service from the Windows Services app (`services.msc`), or by running: `nssm start PTZCameraServer`. The server will now automatically run in the background every time Windows boots.
+
+### 2. Raspberry Pi Viewer (systemd Service)
+To run the `pi_viewer.py` script automatically on the Raspberry Pi, we will create a systemd service. Because the viewer requires the graphical desktop to display OpenCV windows and VLC playback on the HDMI port, we must explicitly pass the `DISPLAY` environment variable to the service.
+
+1. Open a terminal on your Raspberry Pi.
+2. Create a new systemd service file:
+   ```bash
+   sudo nano /etc/systemd/system/ptzviewer.service
+   ```
+3. Paste the following configuration (assuming your username is `pi` and your code is in `/home/pi/PTZ_New`):
+   ```ini
+   [Unit]
+   Description=PTZ Camera Fullscreen Viewer
+   After=graphical.target
+   Wants=graphical.target
+
+   [Service]
+   Type=simple
+   User=pi
+   Environment="DISPLAY=:0"
+   Environment="XAUTHORITY=/home/pi/.Xauthority"
+   WorkingDirectory=/home/pi/PTZ_New
+   ExecStart=/usr/bin/python3 /home/pi/PTZ_New/pi_viewer.py
+   Restart=always
+   RestartSec=5
+
+   [Install]
+   WantedBy=graphical.target
+   ```
+4. Save the file (`Ctrl+O`, `Enter`, `Ctrl+X`).
+5. Reload the systemd daemon to recognize the new service:
+   ```bash
+   sudo systemctl daemon-reload
+   ```
+6. Enable the service to run on boot, and start it immediately:
+   ```bash
+   sudo systemctl enable ptzviewer.service
+   sudo systemctl start ptzviewer.service
+   ```
+7. You can check the logs of the viewer at any time by running: `sudo journalctl -u ptzviewer.service -f`

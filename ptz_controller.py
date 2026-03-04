@@ -30,18 +30,9 @@ class PTZController:
         
         print(f"Connecting to ONVIF camera at {camera_ip}:{port}...")
         
-        import os
-
         try:
-            # Look for the wsdl directory in the project root first
-            project_wsdl = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wsdl')
-
-            if os.path.exists(project_wsdl):
-                # Initialize ONVIF camera with explicit local WSDL path
-                self.cam = ONVIFCamera(camera_ip, port, username, password, wsdl_dir=project_wsdl)
-            else:
-                # Fallback to default pip installation path behavior
-                self.cam = ONVIFCamera(camera_ip, port, username, password)
+            # Initialize ONVIF camera
+            self.cam = ONVIFCamera(camera_ip, port, username, password)
             
             # Create media and PTZ services
             self.media = self.cam.create_media_service()
