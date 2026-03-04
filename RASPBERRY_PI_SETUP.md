@@ -22,7 +22,7 @@ Your application relies on OpenCV and FFmpeg for video processing. These require
 
 Install Python 3, pip, git, FFmpeg, and OpenCV system dependencies by running:
 ```bash
-sudo apt install -y python3 python3-pip python3-venv git ffmpeg libsm6 libxext6 libxrender-dev libgl1-mesa-glx libglib2.0-0
+sudo apt install -y python3 python3-pip python3-venv git ffmpeg libsm6 libxext6 libxrender-dev libgl1 libglib2.0-0
 ```
 
 *Note: `ffmpeg` is absolutely crucial here, as it replaces the Windows executable you were previously using to generate the `latest.mp4` montage.*
