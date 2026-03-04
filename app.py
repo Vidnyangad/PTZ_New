@@ -4,6 +4,20 @@ Flask Application for PTZ Camera Control and Video Recording
 from flask import Flask, render_template, jsonify, request, send_from_directory, Response
 from datetime import datetime
 import os
+
+# ================= SUPPRESS OPENCV/FFMPEG WARNINGS =================
+# Set these BEFORE importing cv2 so the C++ backend reads them correctly on Linux
+os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'
+os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+    "rtsp_transport;tcp|"      # TCP is critical for Raspberry Pi
+    "fflags;nobuffer|"
+    "flags;low_delay|"
+    "max_delay;0|"
+    "analyzeduration;0|"
+    "probesize;32"
+)
+
 import cv2
 import time
 import threading
@@ -14,24 +28,9 @@ from motion_engine import MotionEngine
 from recipes.sample_recipe import recipe as sample_recipe
 import video_processor
 
-# ================= SUPPRESS OPENCV/FFMPEG WARNINGS =================
-# Suppress H.264 decoding errors (normal for RTSP streams)
-os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'
-os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'  # Only show errors, not warnings
-
 # Set FFmpeg log level to quiet (suppress H.264 decode errors)
 import warnings
 warnings.filterwarnings('ignore')
-
-# ================= LOW LATENCY RTSP =================
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-    "rtsp_transport;tcp|"      # Changed to TCP for more reliability
-    "fflags;nobuffer|"
-    "flags;low_delay|"
-    "max_delay;0|"
-    "analyzeduration;0|"       # Don't analyze stream (faster startup)
-    "probesize;32"             # Minimal probe (faster startup)
-)
 
 # Suppress Flask development server warnings
 log = logging.getLogger('werkzeug')
