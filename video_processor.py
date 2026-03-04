@@ -72,7 +72,6 @@ def process_final_video(recorded_video_path, recordings_dir):
         "-map", "[vout]",
         "-map", "2:a",
         "-c:v", "libx264",
-        "-preset", "ultrafast",  # Significantly speeds up software encoding on Raspberry Pi
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "192k",
