@@ -123,5 +123,11 @@ You can check the background logs at any time using: `sudo journalctl -u ptzcame
 ## Troubleshooting
 
 - **"Failed to connect to camera stream":** Ensure the Pi's IP is allowed by the camera (if it has IP filtering) and that the Pi is on the exact same subnet as the camera.
+- **`pip install` stuck at "Preparing metadata (pyproject.toml)":** This happens on the 1GB RAM model of the Pi 4 because the system runs out of memory compiling dependencies (like `lxml`). To fix this, temporarily increase your swap size:
+  1. `sudo dphys-swapfile swapoff`
+  2. `sudo nano /etc/dphys-swapfile`
+  3. Change `CONF_SWAPSIZE=100` to `CONF_SWAPSIZE=1024`
+  4. `sudo dphys-swapfile setup` and then `sudo dphys-swapfile swapon`
+  5. Retry `pip install -r requirements.txt`.
 - **"FFmpeg failed":** If you get an error when saving the motion video, verify that `montage.mp4` and `audio.mp3` are definitely located inside the exact path defined by `RECORDINGS_DIR`.
 - **Sluggish Performance:** If the 720p resizing and FFmpeg rendering feels slightly slower on the Pi than your PC, ensure you are using a good quality power supply for the Pi 4 (5.1V 3A) so it doesn't dynamically throttle its CPU speed.
