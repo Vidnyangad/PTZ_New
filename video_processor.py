@@ -72,6 +72,7 @@ def process_final_video(recorded_video_path, recordings_dir):
         "-map", "[vout]",
         "-map", "2:a",
         "-c:v", "libx264",
+        "-preset", "ultrafast",  # Significantly speeds up software encoding on Raspberry Pi
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "192k",
@@ -81,8 +82,9 @@ def process_final_video(recorded_video_path, recordings_dir):
 
     try:
         print(f"Running FFmpeg: {' '.join(cmd)}")
-        # We use subprocess.run to block until ffmpeg finishes.
-        process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # We use subprocess.run but pipe output to DEVNULL to avoid OS pipe buffer deadlocks,
+        # which commonly cause FFmpeg to hang indefinitely on Raspberry Pi/Linux.
+        process = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
 
         if process.returncode != 0:
             print("FFmpeg failed with error:")
